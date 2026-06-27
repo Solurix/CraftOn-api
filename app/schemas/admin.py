@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from app.schemas.contractor import ContractorProfileOut
 from app.schemas.document import DocumentWithUrlOut
@@ -16,6 +18,16 @@ class RejectIn(BaseModel):
 
 class SuspendIn(BaseModel):
     suspend: bool = True
+
+
+class ConfigOut(BaseModel):
+    """Resolved config/flags snapshot (runtime override > env > default)."""
+
+    config: dict[str, Any]
+
+
+class ConfigUpdateIn(BaseModel):
+    updates: dict[str, Any] = Field(min_length=1)
 
 
 class VettingItem(BaseModel):

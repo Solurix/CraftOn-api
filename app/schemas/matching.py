@@ -23,6 +23,7 @@ class MatchingOut(BaseModel):
     platform_fee: int
     fee_status: FeeStatus
     checked_in_at: datetime.datetime | None
+    completion_requested_at: datetime.datetime | None
     completed_at: datetime.datetime | None
     created_at: datetime.datetime
     updated_at: datetime.datetime

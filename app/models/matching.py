@@ -51,6 +51,10 @@ class Matching(UUIDPKMixin, TimestampMixin, Base):
     checked_in_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Worker tapped "作業完了" (complete-request); contractor then approves → completed.
+    completion_requested_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     completed_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

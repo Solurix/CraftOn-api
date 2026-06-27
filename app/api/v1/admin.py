@@ -21,14 +21,22 @@ from app.core.storage import StorageService
 from app.db.session import get_db
 from app.models.contractor_profile import ContractorProfile
 from app.models.document import Document
-from app.models.enums import UserType
+from app.models.enums import FeeStatus, MatchingStatus, UserType
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
-from app.schemas.admin import RejectIn, SuspendIn, VettingItem, VettingQueueOut
+from app.schemas.admin import (
+    ConfigOut,
+    ConfigUpdateIn,
+    RejectIn,
+    SuspendIn,
+    VettingItem,
+    VettingQueueOut,
+)
 from app.schemas.common import ErrorResponse
 from app.schemas.document import DocumentWithUrlOut
+from app.schemas.matching import MatchingOut
 from app.schemas.user import UserOut
-from app.services import vetting
+from app.services import admin_ops, vetting
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(admin_user)])
 
@@ -105,3 +113,42 @@ def suspend_user(
     target = _get_target(db, user_id)
     updated = vetting.set_suspended(db, target, suspend=payload.suspend)
     return UserOut.model_validate(updated)
+
+
+# -- matchings overview + fee reconciliation -------------------------------
+
+@router.get("/admin/matchings", response_model=list[MatchingOut])
+def list_matchings(
+    db: Session = Depends(get_db),
+    status: MatchingStatus | None = None,
+    fee_status: FeeStatus | None = None,
+) -> list[MatchingOut]:
+    rows = admin_ops.list_matchings(db, status=status, fee_status=fee_status)
+    return [MatchingOut.model_validate(m) for m in rows]
+
+
+@router.post("/admin/matchings/{matching_id}/mark-fee-paid", response_model=MatchingOut,
+             responses=_NOT_FOUND)
+def mark_fee_paid(
+    matching_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> MatchingOut:
+    return MatchingOut.model_validate(admin_ops.mark_fee_paid(db, matching_id))
+
+
+# -- config & flags --------------------------------------------------------
+
+@router.get("/admin/config", response_model=ConfigOut)
+def read_config(config: ConfigService = Depends(get_config)) -> ConfigOut:
+    return ConfigOut(config=config.all_config())
+
+
+@router.patch("/admin/config", response_model=ConfigOut, responses=_NOT_FOUND)
+def update_config(
+    payload: ConfigUpdateIn,
+    admin: User = Depends(admin_user),
+    db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
+) -> ConfigOut:
+    admin_ops.set_config_overrides(db, payload.updates, updated_by=admin.id)
+    return ConfigOut(config=config.all_config())

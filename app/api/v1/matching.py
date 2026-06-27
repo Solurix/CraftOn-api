@@ -26,7 +26,7 @@ from app.models.worker_profile import WorkerProfile
 from app.schemas.application import ApplicantOut, ApplicationOut
 from app.schemas.common import ErrorResponse
 from app.schemas.matching import MatchingOut
-from app.services import applications, matchings, terms
+from app.services import applications, lifecycle, matchings, terms
 
 router = APIRouter(tags=["matching"])
 
@@ -161,4 +161,50 @@ def get_matching(
     db: Session = Depends(get_db),
 ) -> MatchingOut:
     matching = matchings.get_matching(db, user, matching_id)
+    return matching_out(db, matching, locale=user.preferred_language)
+
+
+# -- day-of lifecycle ------------------------------------------------------
+
+@router.post("/matchings/{matching_id}/check-in", response_model=MatchingOut,
+             responses=_ERRORS)
+def check_in(
+    matching_id: uuid.UUID,
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> MatchingOut:
+    matching = lifecycle.check_in(db, user, matching_id)
+    return matching_out(db, matching, locale=user.preferred_language)
+
+
+@router.post("/matchings/{matching_id}/complete-request", response_model=MatchingOut,
+             responses=_ERRORS)
+def complete_request(
+    matching_id: uuid.UUID,
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> MatchingOut:
+    matching = lifecycle.request_completion(db, user, matching_id)
+    return matching_out(db, matching, locale=user.preferred_language)
+
+
+@router.post("/matchings/{matching_id}/approve-completion", response_model=MatchingOut,
+             responses=_ERRORS)
+def approve_completion(
+    matching_id: uuid.UUID,
+    user: User = Depends(approved_contractor),
+    db: Session = Depends(get_db),
+) -> MatchingOut:
+    matching = lifecycle.approve_completion(db, user, matching_id)
+    return matching_out(db, matching, locale=user.preferred_language)
+
+
+@router.post("/matchings/{matching_id}/cancel", response_model=MatchingOut,
+             responses=_ERRORS)
+def cancel_matching(
+    matching_id: uuid.UUID,
+    user: User = Depends(require_approved),
+    db: Session = Depends(get_db),
+) -> MatchingOut:
+    matching = lifecycle.cancel(db, user, matching_id)
     return matching_out(db, matching, locale=user.preferred_language)
