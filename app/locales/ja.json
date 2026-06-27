@@ -1,0 +1,15 @@
+{
+  "error.unauthorized": "認証が必要です。",
+  "error.forbidden": "この操作を行う権限がありません。",
+  "error.not_found": "対象が見つかりません。",
+  "error.validation": "入力内容に誤りがあります。",
+  "error.internal": "サーバーエラーが発生しました。しばらくしてからお試しください。",
+  "error.auth.invalid_token": "ログイン情報が無効です。再度ログインしてください。",
+  "error.auth.no_phone": "電話番号が確認できませんでした。",
+  "error.user.role_required": "新規登録には職種（worker または contractor）の選択が必要です。",
+  "error.user.invalid_role": "選択された職種が正しくありません。",
+  "error.user.suspended": "アカウントが停止されています。サポートにお問い合わせください。",
+  "role.worker": "職人",
+  "role.contractor": "工務店",
+  "role.admin": "管理者"
+}
