@@ -1,15 +1,15 @@
 """initial schema
 
 Revision ID: e7b9856f81d3
-Revises: 
+Revises:
 Create Date: 2026-06-27 09:35:39.566126+00:00
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = 'e7b9856f81d3'
