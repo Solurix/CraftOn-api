@@ -1,0 +1,75 @@
+"""Shared FastAPI dependencies: DB session, config, auth, and role guards."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core import errors
+from app.core.auth import FirebaseClaims, InvalidTokenError, get_verifier
+from app.core.config import ConfigService
+from app.db.session import get_db
+from app.models.enums import UserType
+from app.models.user import User
+
+# auto_error=False so we can return our own localized error envelope.
+_bearer = HTTPBearer(auto_error=False, description="Firebase ID token")
+
+
+def get_config(db: Session = Depends(get_db)) -> ConfigService:
+    return ConfigService(db)
+
+
+def get_claims(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> FirebaseClaims:
+    """Verify the bearer token and return its claims (401 if missing/invalid)."""
+    if credentials is None or not credentials.credentials:
+        raise errors.unauthorized()
+    try:
+        return get_verifier().verify(credentials.credentials)
+    except InvalidTokenError as exc:
+        raise errors.unauthorized("error.auth.invalid_token") from exc
+
+
+def get_current_user(
+    request: Request,
+    claims: FirebaseClaims = Depends(get_claims),
+    db: Session = Depends(get_db),
+) -> User:
+    """Map verified claims to the ``users`` row (401 if not yet onboarded).
+
+    First-time users must call ``POST /auth/session`` to create their row.
+    """
+    if not claims.phone_number:
+        raise errors.unauthorized("error.auth.no_phone")
+    user = db.scalar(select(User).where(User.phone_number == claims.phone_number))
+    if user is None:
+        raise errors.unauthorized()
+    # Localize subsequent errors to the user's preference.
+    request.state.locale = user.preferred_language
+    return user
+
+
+def require_active(user: User = Depends(get_current_user)) -> User:
+    """Block suspended accounts from acting (read-only /me stays accessible)."""
+    from app.models.enums import UserStatus
+
+    if user.status is UserStatus.SUSPENDED:
+        raise errors.forbidden("error.user.suspended")
+    return user
+
+
+def require_roles(*roles: UserType) -> Callable[..., User]:
+    """Build a dependency that allows only the given roles (403 otherwise)."""
+
+    def _guard(user: User = Depends(require_active)) -> User:
+        if user.user_type not in roles:
+            raise errors.forbidden()
+        return user
+
+    return _guard
