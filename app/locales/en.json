@@ -28,6 +28,8 @@
   "error.matching.not_checked_in": "Check-in has not been completed.",
   "error.matching.completion_not_requested": "The worker has not reported completion yet.",
   "error.config.unknown_key": "Unknown config key(s): {keys}",
+  "error.review.not_completed": "Only completed matchings can be reviewed.",
+  "error.review.already_reviewed": "You have already left this review.",
   "terms.title.employment_daylabor": "Day-Labor Employment Agreement (placeholder)",
   "terms.title.subcontract": "Subcontract Agreement (placeholder)",
   "terms.body.employment_daylabor": "{company} employs {worker} as a day laborer on {date} and pays a daily wage of JPY {wage} in cash on site. Labor insurance follows the site's coverage.",

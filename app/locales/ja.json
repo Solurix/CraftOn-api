@@ -28,6 +28,8 @@
   "error.matching.not_checked_in": "チェックインが完了していません。",
   "error.matching.completion_not_requested": "作業員による完了報告がまだありません。",
   "error.config.unknown_key": "不明な設定キーです: {keys}",
+  "error.review.not_completed": "完了した取引のみレビューできます。",
+  "error.review.already_reviewed": "すでにレビュー済みです。",
   "terms.title.employment_daylabor": "日雇労働契約（プレースホルダー）",
   "terms.title.subcontract": "業務委託契約（プレースホルダー）",
   "terms.body.employment_daylabor": "{company} は {worker} を {date} の日雇労働者として雇用し、日当 {wage} 円を現場にて現金で支払います。労働保険は現場の適用に従います。",
