@@ -46,6 +46,11 @@ class AuthMode(StrEnum):
     FIREBASE = "firebase"
 
 
+class StorageMode(StrEnum):
+    FAKE = "fake"
+    GCS = "gcs"
+
+
 class Settings(BaseSettings):
     """Infrastructure/app-level settings sourced from the environment.
 
@@ -72,7 +77,9 @@ class Settings(BaseSettings):
     auth_mode: AuthMode = AuthMode.FAKE
     firebase_project_id: str = "crafton-dev-500709"
 
-    # Cloud Storage (used from build-order step 2 onward)
+    # Cloud Storage (documents). `fake` returns deterministic local URLs for
+    # dev/CI/tests; `gcs` issues real signed URLs (requires the `gcs` extra).
+    storage_mode: StorageMode = StorageMode.FAKE
     gcs_bucket: str = "crafton-dev-500709-uploads"
     signed_url_ttl_seconds: int = 900
 

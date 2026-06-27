@@ -81,9 +81,21 @@ def create_session(
 
 @router.get("/me", response_model=MeOut, responses={401: {"model": ErrorResponse}})
 def get_me(user: User = Depends(get_current_user)) -> MeOut:
-    """Current user + profile-completeness flags."""
+    """Current user + their profile (if onboarded)."""
+    from app.api.v1.onboarding import contractor_out, worker_out
+
+    worker = (
+        worker_out(user.worker_profile, user) if user.worker_profile is not None else None
+    )
+    contractor = (
+        contractor_out(user.contractor_profile, user)
+        if user.contractor_profile is not None
+        else None
+    )
     return MeOut(
         user=UserOut.model_validate(user),
-        has_worker_profile=user.worker_profile is not None,
-        has_contractor_profile=user.contractor_profile is not None,
+        has_worker_profile=worker is not None,
+        has_contractor_profile=contractor is not None,
+        worker_profile=worker,
+        contractor_profile=contractor,
     )

@@ -8,6 +8,8 @@ import uuid
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import UserStatus, UserType
+from app.schemas.contractor import ContractorProfileOut
+from app.schemas.worker import WorkerProfileOut
 
 
 class UserOut(BaseModel):
@@ -42,6 +44,7 @@ class SessionOut(BaseModel):
 
 class MeOut(BaseModel):
     user: UserOut
-    # Onboarding/profile payloads are attached in build-order step 2.
     has_worker_profile: bool = False
     has_contractor_profile: bool = False
+    worker_profile: WorkerProfileOut | None = None
+    contractor_profile: ContractorProfileOut | None = None

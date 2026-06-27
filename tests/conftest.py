@@ -105,3 +105,23 @@ def auth_headers() -> Callable[..., dict[str, str]]:
         return {"Authorization": f"Bearer {make_fake_token(phone_number, **extra)}"}
 
     return _build
+
+
+@pytest.fixture
+def seed_admin(db: Session) -> Callable[..., dict[str, str]]:
+    """Seed an approved admin (not self-assignable via API) and return its headers."""
+    from app.models.enums import UserStatus, UserType
+    from app.models.user import User
+
+    def _seed(phone_number: str = "+818000000001") -> dict[str, str]:
+        user = User(
+            phone_number=phone_number,
+            user_type=UserType.ADMIN,
+            status=UserStatus.APPROVED,
+            display_name="Admin",
+        )
+        db.add(user)
+        db.commit()
+        return {"Authorization": f"Bearer {make_fake_token(phone_number)}"}
+
+    return _seed

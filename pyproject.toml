@@ -74,7 +74,7 @@ no_implicit_optional = true
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["firebase_admin.*"]
+module = ["firebase_admin.*", "google.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

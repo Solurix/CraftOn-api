@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -16,12 +17,21 @@ from app.db.session import get_db
 from app.models.enums import UserType
 from app.models.user import User
 
+if TYPE_CHECKING:
+    from app.core.storage import StorageService
+
 # auto_error=False so we can return our own localized error envelope.
 _bearer = HTTPBearer(auto_error=False, description="Firebase ID token")
 
 
 def get_config(db: Session = Depends(get_db)) -> ConfigService:
     return ConfigService(db)
+
+
+def get_storage_service() -> StorageService:
+    from app.core.storage import get_storage
+
+    return get_storage()
 
 
 def get_claims(
@@ -73,3 +83,25 @@ def require_roles(*roles: UserType) -> Callable[..., User]:
         return user
 
     return _guard
+
+
+def require_approved(user: User = Depends(require_active)) -> User:
+    """Require an approved account (for actions gated behind vetting)."""
+    from app.models.enums import UserStatus
+
+    if user.status is not UserStatus.APPROVED:
+        raise errors.forbidden("error.user.not_approved")
+    return user
+
+
+# Convenience role dependencies.
+def worker_user(user: User = Depends(require_roles(UserType.WORKER))) -> User:
+    return user
+
+
+def contractor_user(user: User = Depends(require_roles(UserType.CONTRACTOR))) -> User:
+    return user
+
+
+def admin_user(user: User = Depends(require_roles(UserType.ADMIN))) -> User:
+    return user
