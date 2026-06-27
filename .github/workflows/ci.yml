@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  # Tests use the fake auth verifier — no GCP credentials required.
+  CRAFTON_AUTH_MODE: fake
+  CRAFTON_ENV: ci
+  CRAFTON_DATABASE_URL: postgresql+psycopg://crafton:crafton@localhost:5432/crafton
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crafton
+          POSTGRES_PASSWORD: crafton
+          POSTGRES_DB: crafton
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crafton -d crafton"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type-check (mypy)
+        run: mypy app
+
+      - name: i18n ja/en parity check
+        run: python -m app.core.i18n --check
+
+      - name: Migrations apply (upgrade head)
+        run: alembic upgrade head
+
+      - name: Migrations reverse (downgrade base)
+        run: alembic downgrade base
+
+      - name: Tests (pytest)
+        run: pytest --cov=app --cov-report=term-missing

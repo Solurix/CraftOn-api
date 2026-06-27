@@ -1,0 +1,20 @@
+# Local development helpers. Production uses Cloud SQL (see crafton infra).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: crafton
+      POSTGRES_PASSWORD: crafton
+      POSTGRES_DB: crafton
+    ports:
+      - "5432:5432"
+    volumes:
+      - crafton_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crafton -d crafton"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  crafton_pgdata:
