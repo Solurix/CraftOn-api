@@ -94,7 +94,7 @@ def require_approved(user: User = Depends(require_active)) -> User:
     return user
 
 
-# Convenience role dependencies.
+# Convenience role dependencies (active = not suspended; pending allowed).
 def worker_user(user: User = Depends(require_roles(UserType.WORKER))) -> User:
     return user
 
@@ -104,4 +104,17 @@ def contractor_user(user: User = Depends(require_roles(UserType.CONTRACTOR))) ->
 
 
 def admin_user(user: User = Depends(require_roles(UserType.ADMIN))) -> User:
+    return user
+
+
+# Approved + specific role (for actions gated behind vetting, e.g. posting/applying).
+def approved_worker(user: User = Depends(require_approved)) -> User:
+    if user.user_type is not UserType.WORKER:
+        raise errors.forbidden()
+    return user
+
+
+def approved_contractor(user: User = Depends(require_approved)) -> User:
+    if user.user_type is not UserType.CONTRACTOR:
+        raise errors.forbidden()
     return user

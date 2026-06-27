@@ -108,6 +108,44 @@ def auth_headers() -> Callable[..., dict[str, str]]:
 
 
 @pytest.fixture
+def approved_member(
+    client: TestClient, db: Session, auth_headers: Callable[..., dict[str, str]]
+) -> Callable[..., tuple[dict[str, str], str]]:
+    """Sign up a worker/contractor, optionally onboard, and mark them approved.
+
+    Returns ``(auth_headers, user_id)``. Bypasses admin vetting for setup speed;
+    the gate itself is exercised in test_vetting_visa_gate.
+    """
+    import uuid as _uuid
+
+    from app.models.enums import UserStatus
+    from app.models.user import User
+
+    def _make(
+        role: str, phone: str, *, onboard: dict | None = None
+    ) -> tuple[dict[str, str], str]:
+        headers = auth_headers(phone)
+        resp = client.post(
+            "/api/v1/auth/session",
+            json={"user_type": role, "display_name": role.title()},
+            headers=headers,
+        )
+        assert resp.status_code in (200, 201), resp.text
+        user_id = resp.json()["user"]["id"]
+        if onboard is not None:
+            path = f"/api/v1/onboarding/{role}"
+            onb = client.post(path, json=onboard, headers=headers)
+            assert onb.status_code == 200, onb.text
+        user = db.get(User, _uuid.UUID(user_id))
+        assert user is not None
+        user.status = UserStatus.APPROVED
+        db.commit()
+        return headers, user_id
+
+    return _make
+
+
+@pytest.fixture
 def seed_admin(db: Session) -> Callable[..., dict[str, str]]:
     """Seed an approved admin (not self-assignable via API) and return its headers."""
     from app.models.enums import UserStatus, UserType

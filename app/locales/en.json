@@ -17,6 +17,10 @@
   "error.visa.expiry_required": "A visa expiry date is required.",
   "error.visa.expired": "The visa has expired, so approval/confirmation is blocked.",
   "error.insurance.freelance_required": "Freelance (一人親方) workers need proof of labor insurance.",
+  "error.job.out_of_area": "This area is outside the service area for now. Please join the waitlist.",
+  "error.job.trade_not_allowed": "The selected trade is not currently accepted.",
+  "error.job.not_editable": "Only open jobs can be edited.",
+  "error.job.not_cancelable": "This job cannot be canceled.",
   "role.worker": "Worker",
   "role.contractor": "Contractor",
   "role.admin": "Admin"

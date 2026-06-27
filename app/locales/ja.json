@@ -17,6 +17,10 @@
   "error.visa.expiry_required": "在留期限の入力が必要です。",
   "error.visa.expired": "在留期限が切れているため、承認・確定できません。",
   "error.insurance.freelance_required": "一人親方の方は労災保険の証明が必要です。",
+  "error.job.out_of_area": "対象エリア外のため、現在この地域では投稿できません。順番待ちにご登録ください。",
+  "error.job.trade_not_allowed": "選択された職種は現在受け付けていません。",
+  "error.job.not_editable": "募集中の求人のみ編集できます。",
+  "error.job.not_cancelable": "この求人はキャンセルできません。",
   "role.worker": "職人",
   "role.contractor": "工務店",
   "role.admin": "管理者"
