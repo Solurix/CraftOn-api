@@ -15,6 +15,7 @@ from app.api.v1 import (
     documents,
     jobs,
     matching,
+    notifications,
     onboarding,
     reviews,
 )
@@ -27,4 +28,5 @@ api_router.include_router(jobs.router)
 api_router.include_router(matching.router)
 api_router.include_router(chat.router)
 api_router.include_router(reviews.router)
+api_router.include_router(notifications.router)
 api_router.include_router(admin.router)

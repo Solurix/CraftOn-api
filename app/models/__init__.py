@@ -9,6 +9,7 @@ from app.models.document import Document
 from app.models.job import Job
 from app.models.matching import Matching
 from app.models.message import Message
+from app.models.notification import Notification
 from app.models.review import Review
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
@@ -21,6 +22,7 @@ __all__ = [
     "Job",
     "Matching",
     "Message",
+    "Notification",
     "Review",
     "User",
     "WorkerProfile",

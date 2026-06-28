@@ -13,11 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.core import errors
 from app.core.clock import now_utc
-from app.models.enums import MatchingStatus
+from app.models.enums import MatchingStatus, NotificationType
 from app.models.job import Job
 from app.models.matching import Matching
 from app.models.user import User
-from app.services import matchings
+from app.services import matchings, notifications
 from app.services.state_machine import assert_transition
 
 
@@ -40,11 +40,22 @@ def _matching_for_contractor(db: Session, contractor: User, matching_id: uuid.UU
     return matching
 
 
+def _contractor_id(db: Session, matching: Matching) -> uuid.UUID | None:
+    job = db.get(Job, matching.job_id)
+    return job.contractor_id if job else None
+
+
 def check_in(db: Session, worker: User, matching_id: uuid.UUID) -> Matching:
     matching = _matching_for_worker(db, worker, matching_id)
     assert_transition(matching.status, MatchingStatus.CHECKED_IN)
     matching.status = MatchingStatus.CHECKED_IN
     matching.checked_in_at = now_utc()
+    contractor_id = _contractor_id(db, matching)
+    if contractor_id is not None:
+        notifications.notify(
+            db, contractor_id, NotificationType.WORKER_CHECKED_IN,
+            params={"name": worker.display_name}, link=f"/matchings/{matching.id}",
+        )
     db.commit()
     db.refresh(matching)
     return matching
@@ -55,6 +66,12 @@ def request_completion(db: Session, worker: User, matching_id: uuid.UUID) -> Mat
     if matching.status is not MatchingStatus.CHECKED_IN:
         raise errors.conflict("not_checked_in", "error.matching.not_checked_in")
     matching.completion_requested_at = now_utc()
+    contractor_id = _contractor_id(db, matching)
+    if contractor_id is not None:
+        notifications.notify(
+            db, contractor_id, NotificationType.COMPLETION_REQUESTED,
+            params={"name": worker.display_name}, link=f"/matchings/{matching.id}",
+        )
     db.commit()
     db.refresh(matching)
     return matching
@@ -68,6 +85,12 @@ def approve_completion(db: Session, contractor: User, matching_id: uuid.UUID) ->
     matching.status = MatchingStatus.COMPLETED
     matching.completed_at = now_utc()
     # Fee was set at confirm and remains owed (unpaid) for manual reconciliation.
+    job = db.get(Job, matching.job_id)
+    notifications.notify(
+        db, matching.worker_id, NotificationType.COMPLETION_APPROVED,
+        params={"date": job.work_date.isoformat() if job else ""},
+        link=f"/matchings/{matching.id}",
+    )
     db.commit()
     db.refresh(matching)
     return matching

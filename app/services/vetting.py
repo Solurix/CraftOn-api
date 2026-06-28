@@ -11,10 +11,10 @@ from app.core import errors
 from app.core.config import ConfigService
 from app.models.contractor_profile import ContractorProfile
 from app.models.document import Document
-from app.models.enums import DocReviewStatus, UserStatus, UserType
+from app.models.enums import DocReviewStatus, NotificationType, UserStatus, UserType
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
-from app.services import compliance
+from app.services import compliance, notifications
 
 
 def vetting_queue(db: Session) -> list[User]:
@@ -77,6 +77,7 @@ def approve_user(
 
     target.status = UserStatus.APPROVED
     _set_pending_docs(db, target, DocReviewStatus.APPROVED, None)
+    notifications.notify(db, target.id, NotificationType.ACCOUNT_APPROVED, link="/")
     db.commit()
     db.refresh(target)
     return target
@@ -85,6 +86,7 @@ def approve_user(
 def reject_user(db: Session, target: User, *, reason: str | None) -> User:
     """Reject the submitted documents (user stays pending to re-upload)."""
     _set_pending_docs(db, target, DocReviewStatus.REJECTED, reason)
+    notifications.notify(db, target.id, NotificationType.ACCOUNT_REJECTED, link="/profile")
     db.commit()
     db.refresh(target)
     return target

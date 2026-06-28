@@ -16,12 +16,19 @@ from sqlalchemy.orm import Session
 from app.core import errors
 from app.core.config import ConfigService
 from app.models.application import Application
-from app.models.enums import ApplicationStatus, FeeStatus, JobStatus, MatchingStatus
+from app.models.contractor_profile import ContractorProfile
+from app.models.enums import (
+    ApplicationStatus,
+    FeeStatus,
+    JobStatus,
+    MatchingStatus,
+    NotificationType,
+)
 from app.models.job import Job
 from app.models.matching import Matching
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
-from app.services import compliance, terms
+from app.services import compliance, notifications, terms
 
 
 def apply_to_job(db: Session, worker: User, job_id: uuid.UUID) -> Application:
@@ -41,6 +48,13 @@ def apply_to_job(db: Session, worker: User, job_id: uuid.UUID) -> Application:
 
     application = Application(job_id=job_id, worker_id=worker.id)
     db.add(application)
+    notifications.notify(
+        db,
+        job.contractor_id,
+        NotificationType.APPLICATION_RECEIVED,
+        params={"name": worker.display_name},
+        link=f"/my-jobs/{job.id}",
+    )
     db.commit()
     db.refresh(application)
     return application
@@ -106,6 +120,7 @@ def confirm_application(
         fee_status=FeeStatus.UNPAID,
     )
     db.add(matching)
+    db.flush()  # populate matching.id for the notification link
     application.status = ApplicationStatus.CONFIRMED
 
     # Mark the job filled once headcount is met.
@@ -117,6 +132,18 @@ def confirm_application(
     if (confirmed_count or 0) + 1 >= job.headcount:
         job.status = JobStatus.FILLED
 
+    company = db.get(ContractorProfile, job.contractor_id)
+    notifications.notify(
+        db,
+        application.worker_id,
+        NotificationType.APPLICATION_CONFIRMED,
+        params={
+            "company": company.company_name if company else "",
+            "date": job.work_date.isoformat(),
+        },
+        link=f"/matchings/{matching.id}",
+    )
+
     db.commit()
     db.refresh(matching)
     return matching
@@ -127,6 +154,12 @@ def reject_application(db: Session, contractor: User, application_id: uuid.UUID)
     if application.status is not ApplicationStatus.APPLIED:
         raise errors.conflict("application_not_pending", "error.application.not_pending")
     application.status = ApplicationStatus.REJECTED
+    notifications.notify(
+        db,
+        application.worker_id,
+        NotificationType.APPLICATION_REJECTED,
+        link="/applications",
+    )
     db.commit()
     db.refresh(application)
     return application

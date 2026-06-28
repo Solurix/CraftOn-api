@@ -81,6 +81,21 @@ class ReviewDirection(StrEnum):
     WORKER_TO_CONTRACTOR = "worker_to_contractor"
 
 
+class NotificationType(StrEnum):
+    """In-app notification kinds. Stored as a varchar (not a DB enum) so new
+    types don't need a migration; this enum is the known, rendered set."""
+
+    APPLICATION_RECEIVED = "application_received"
+    APPLICATION_CONFIRMED = "application_confirmed"
+    APPLICATION_REJECTED = "application_rejected"
+    WORKER_CHECKED_IN = "worker_checked_in"
+    COMPLETION_REQUESTED = "completion_requested"
+    COMPLETION_APPROVED = "completion_approved"
+    REVIEW_RECEIVED = "review_received"
+    ACCOUNT_APPROVED = "account_approved"
+    ACCOUNT_REJECTED = "account_rejected"
+
+
 def pg_enum(enum_cls: type[StrEnum], name: str) -> SAEnum:
     """Build a native PostgreSQL enum that stores member *values*.
 

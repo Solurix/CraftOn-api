@@ -16,12 +16,12 @@ from sqlalchemy.orm import Session
 
 from app.core import errors
 from app.models.contractor_profile import ContractorProfile
-from app.models.enums import MatchingStatus, ReviewDirection
+from app.models.enums import MatchingStatus, NotificationType, ReviewDirection
 from app.models.job import Job
 from app.models.review import Review
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
-from app.services import matchings
+from app.services import matchings, notifications
 
 
 def _avg_rating(db: Session, reviewee_id: uuid.UUID, direction: ReviewDirection) -> Decimal:
@@ -86,6 +86,13 @@ def create_review(
     db.add(review)
     db.flush()  # ensure the new row is counted in the average
     _recompute_display(db, reviewee_id, direction)
+    notifications.notify(
+        db,
+        reviewee_id,
+        NotificationType.REVIEW_RECEIVED,
+        params={"rating": rating},
+        link=f"/matchings/{matching_id}",
+    )
     db.commit()
     db.refresh(review)
     return review
