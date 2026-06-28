@@ -62,6 +62,21 @@ def get_current_user(
         raise errors.unauthorized()
     # Localize subsequent errors to the user's preference.
     request.state.locale = user.preferred_language
+    # Record/refresh the calling device (and reject it if revoked). Header-gated,
+    # so non-device clients (server-to-server, tests) are unaffected.
+    device_id = request.headers.get("x-device-id")
+    if device_id:
+        import datetime
+
+        from app.services import devices
+
+        devices.touch_device(
+            db,
+            user,
+            device_id,
+            request.headers.get("x-device-name"),
+            datetime.datetime.now(datetime.UTC),
+        )
     return user
 
 

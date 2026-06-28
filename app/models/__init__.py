@@ -5,6 +5,7 @@ so Alembic autogeneration and ``create_all`` see the full schema.
 from app.models.app_config import AppConfig
 from app.models.application import Application
 from app.models.contractor_profile import ContractorProfile
+from app.models.device import Device
 from app.models.document import Document
 from app.models.job import Job
 from app.models.matching import Matching
@@ -19,6 +20,7 @@ __all__ = [
     "AppConfig",
     "Application",
     "ContractorProfile",
+    "Device",
     "Document",
     "Job",
     "Matching",

@@ -12,6 +12,7 @@ from app.api.v1 import (
     admin,
     auth,
     chat,
+    devices,
     documents,
     jobs,
     matching,
@@ -29,4 +30,5 @@ api_router.include_router(matching.router)
 api_router.include_router(chat.router)
 api_router.include_router(reviews.router)
 api_router.include_router(notifications.router)
+api_router.include_router(devices.router)
 api_router.include_router(admin.router)
