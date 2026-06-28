@@ -27,6 +27,7 @@ from app.models.matching import Matching
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 from app.schemas.admin import (
+    AdminCreateIn,
     ConfigOut,
     ConfigUpdateIn,
     RejectIn,
@@ -126,6 +127,30 @@ def list_jobs(
     status: JobStatus | None = None,
 ) -> list[JobOut]:
     return [_admin_job_out(db, j) for j in admin_ops.list_jobs(db, status=status)]
+
+
+# -- admins ----------------------------------------------------------------
+
+@router.get("/admin/admins", response_model=list[UserOut])
+def list_admins(db: Session = Depends(get_db)) -> list[UserOut]:
+    return [UserOut.model_validate(u) for u in admin_ops.list_admins(db)]
+
+
+@router.post(
+    "/admin/admins", response_model=UserOut, status_code=201,
+    responses={409: {"model": ErrorResponse}},
+)
+def create_admin(
+    payload: AdminCreateIn,
+    db: Session = Depends(get_db),
+) -> UserOut:
+    admin = admin_ops.create_admin(
+        db,
+        phone_number=payload.phone_number,
+        display_name=payload.display_name,
+        preferred_language=payload.preferred_language,
+    )
+    return UserOut.model_validate(admin)
 
 
 @router.post("/admin/users/{user_id}/approve", response_model=UserOut, responses=_NOT_FOUND)

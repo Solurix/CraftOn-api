@@ -12,6 +12,14 @@ from app.schemas.user import UserOut
 from app.schemas.worker import WorkerProfileOut
 
 
+class AdminCreateIn(BaseModel):
+    """Create a new admin account by phone number."""
+
+    phone_number: str = Field(min_length=5, max_length=32)
+    display_name: str = Field(min_length=1, max_length=120)
+    preferred_language: str = Field(default="ja", min_length=2, max_length=8)
+
+
 class RejectIn(BaseModel):
     reason: str | None = None
 

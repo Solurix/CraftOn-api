@@ -11,9 +11,40 @@ from sqlalchemy.orm import Session
 from app.core import errors
 from app.core.config import CONFIG_DEFAULTS
 from app.models.app_config import AppConfig
-from app.models.enums import FeeStatus, JobStatus, MatchingStatus
+from app.models.enums import FeeStatus, JobStatus, MatchingStatus, UserStatus, UserType
 from app.models.job import Job
 from app.models.matching import Matching
+from app.models.user import User
+
+
+def list_admins(db: Session) -> list[User]:
+    return list(
+        db.scalars(
+            select(User)
+            .where(User.user_type == UserType.ADMIN)
+            .order_by(User.created_at.desc())
+        ).all()
+    )
+
+
+def create_admin(
+    db: Session, *, phone_number: str, display_name: str, preferred_language: str = "ja"
+) -> User:
+    """Create a new, already-approved admin account (admin-only action)."""
+    existing = db.scalar(select(User).where(User.phone_number == phone_number))
+    if existing is not None:
+        raise errors.conflict("user_exists", "error.admin.user_exists")
+    admin = User(
+        phone_number=phone_number,
+        user_type=UserType.ADMIN,
+        status=UserStatus.APPROVED,
+        display_name=display_name,
+        preferred_language=preferred_language,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return admin
 
 
 def list_jobs(db: Session, *, status: JobStatus | None = None) -> list[Job]:
