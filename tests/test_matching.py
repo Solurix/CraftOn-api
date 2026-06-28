@@ -147,6 +147,25 @@ def test_headcount_one_fills_job(client: TestClient, approved_member: Member) ->
     assert client.get(f"/api/v1/jobs/{job_id}", headers=ch).json()["status"] == "filled"
 
 
+def test_headcount_two_fills_only_after_second_confirm(
+    client: TestClient, approved_member: Member
+) -> None:
+    # A headcount=2 job must stay open after the first confirmation and only
+    # flip to filled once the second worker is confirmed.
+    ch, _ = approved_member("contractor", _next_phone(), onboard=_CONTRACTOR)
+    w1, _ = approved_member("worker", _next_phone(), onboard=_EMPLOYEE)
+    w2, _ = approved_member("worker", _next_phone(), onboard=_EMPLOYEE)
+    job_id = _post_job(client, ch, headcount=2)
+    a1 = _apply(client, w1, job_id)
+    a2 = _apply(client, w2, job_id)
+
+    client.post(f"/api/v1/applications/{a1}/confirm", headers=ch)
+    assert client.get(f"/api/v1/jobs/{job_id}", headers=ch).json()["status"] == "open"
+
+    client.post(f"/api/v1/applications/{a2}/confirm", headers=ch)
+    assert client.get(f"/api/v1/jobs/{job_id}", headers=ch).json()["status"] == "filled"
+
+
 def test_matchings_visibility(client: TestClient, approved_member: Member) -> None:
     ch, _ = approved_member("contractor", _next_phone(), onboard=_CONTRACTOR)
     wh, _ = approved_member("worker", _next_phone(), onboard=_EMPLOYEE)

@@ -123,13 +123,14 @@ def confirm_application(
     db.flush()  # populate matching.id for the notification link
     application.status = ApplicationStatus.CONFIRMED
 
-    # Mark the job filled once headcount is met.
+    # Mark the job filled once headcount is met. The matching we just added is
+    # flushed above, so it is already included in this count — do not add it again.
     confirmed_count = db.scalar(
         select(func.count())
         .select_from(Matching)
         .where(Matching.job_id == job.id, Matching.status != MatchingStatus.CANCELED)
     )
-    if (confirmed_count or 0) + 1 >= job.headcount:
+    if (confirmed_count or 0) >= job.headcount:
         job.status = JobStatus.FILLED
 
     company = db.get(ContractorProfile, job.contractor_id)
