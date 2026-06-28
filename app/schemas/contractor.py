@@ -15,6 +15,7 @@ class ContractorOnboardingIn(BaseModel):
     contact_person: str
     prefecture: str
     address: str | None = None
+    bio: str | None = None
     display_name: str | None = None
 
 
@@ -23,6 +24,7 @@ class ContractorProfileUpdate(BaseModel):
     contact_person: str | None = None
     prefecture: str | None = None
     address: str | None = None
+    bio: str | None = None
     display_name: str | None = None
 
 
@@ -38,6 +40,7 @@ class ContractorProfileOut(BaseModel):
     contact_person: str
     prefecture: str
     address: str | None
+    bio: str | None
     rating: Decimal
 
 
@@ -48,4 +51,5 @@ class ContractorPublicOut(BaseModel):
     display_name: str
     company_name: str
     prefecture: str
+    bio: str | None
     rating: Decimal

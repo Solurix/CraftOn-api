@@ -29,6 +29,21 @@ def vetting_queue(db: Session) -> list[User]:
     )
 
 
+def list_users(
+    db: Session,
+    *,
+    user_type: UserType | None = None,
+    status: UserStatus | None = None,
+) -> list[User]:
+    """All users (admin overview), newest first, optionally filtered."""
+    stmt = select(User)
+    if user_type is not None:
+        stmt = stmt.where(User.user_type == user_type)
+    if status is not None:
+        stmt = stmt.where(User.status == status)
+    return list(db.scalars(stmt.order_by(User.created_at.desc())).all())
+
+
 def user_documents(db: Session, user_id: object) -> list[Document]:
     return list(
         db.scalars(

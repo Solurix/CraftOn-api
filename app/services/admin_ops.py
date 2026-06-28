@@ -11,8 +11,17 @@ from sqlalchemy.orm import Session
 from app.core import errors
 from app.core.config import CONFIG_DEFAULTS
 from app.models.app_config import AppConfig
-from app.models.enums import FeeStatus, MatchingStatus
+from app.models.enums import FeeStatus, JobStatus, MatchingStatus
+from app.models.job import Job
 from app.models.matching import Matching
+
+
+def list_jobs(db: Session, *, status: JobStatus | None = None) -> list[Job]:
+    """All jobs (admin overview), newest first, optionally filtered by status."""
+    stmt = select(Job)
+    if status is not None:
+        stmt = stmt.where(Job.status == status)
+    return list(db.scalars(stmt.order_by(Job.created_at.desc())).all())
 
 
 def list_matchings(

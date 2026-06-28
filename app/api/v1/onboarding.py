@@ -43,6 +43,8 @@ def worker_out(profile: WorkerProfile, user: User) -> WorkerProfileOut:
         trades=profile.trades,
         tools=profile.tools,
         has_insurance=profile.has_insurance,
+        bio=profile.bio,
+        years_experience=profile.years_experience,
         trust_score=profile.trust_score,
         visa_expiry_date=profile.visa_expiry_date,
         work_restriction=profile.work_restriction,
@@ -60,6 +62,7 @@ def contractor_out(profile: ContractorProfile, user: User) -> ContractorProfileO
         contact_person=profile.contact_person,
         prefecture=profile.prefecture,
         address=profile.address,
+        bio=profile.bio,
         rating=profile.rating,
     )
 
@@ -117,6 +120,8 @@ def get_worker(
         worker_class=profile.worker_class,
         trades=profile.trades,
         tools=profile.tools,
+        bio=profile.bio,
+        years_experience=profile.years_experience,
         trust_score=profile.trust_score,
     )
 
@@ -133,5 +138,6 @@ def get_contractor(
         display_name=onboarding.display_name_for(db, profile.user_id),
         company_name=profile.company_name,
         prefecture=profile.prefecture,
+        bio=profile.bio,
         rating=profile.rating,
     )

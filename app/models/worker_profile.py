@@ -7,7 +7,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,6 +49,11 @@ class WorkerProfile(TimestampMixin, Base):
     )
     tools: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
+    )
+    # Profile detail (Phase 1 display only).
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    years_experience: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
     )
     # Derived display value in Phase 1 (automated penalties are P2).
     trust_score: Mapped[Decimal] = mapped_column(

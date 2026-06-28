@@ -52,6 +52,8 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     profile.trades = payload.trades
     profile.tools = payload.tools
     profile.has_insurance = payload.has_insurance
+    profile.bio = payload.bio
+    profile.years_experience = payload.years_experience
     profile.residence_card_front_doc_id = payload.residence_card_front_doc_id
     profile.residence_card_back_doc_id = payload.residence_card_back_doc_id
     profile.visa_expiry_date = payload.visa_expiry_date
@@ -104,6 +106,7 @@ def onboard_contractor(
     profile.contact_person = payload.contact_person
     profile.prefecture = payload.prefecture
     profile.address = payload.address
+    profile.bio = payload.bio
 
     db.commit()
     db.refresh(profile)

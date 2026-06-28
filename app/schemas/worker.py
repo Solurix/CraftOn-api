@@ -20,6 +20,8 @@ class WorkerOnboardingIn(BaseModel):
     trades: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     has_insurance: bool = False
+    bio: str | None = None
+    years_experience: int = Field(default=0, ge=0)
     # Non-JP only; the visa gate (docs/08) checks these at approval/confirm.
     residence_card_front_doc_id: uuid.UUID | None = None
     residence_card_back_doc_id: uuid.UUID | None = None
@@ -34,6 +36,8 @@ class WorkerProfileUpdate(BaseModel):
     trades: list[str] | None = None
     tools: list[str] | None = None
     has_insurance: bool | None = None
+    bio: str | None = None
+    years_experience: int | None = Field(default=None, ge=0)
     residence_card_front_doc_id: uuid.UUID | None = None
     residence_card_back_doc_id: uuid.UUID | None = None
     visa_expiry_date: datetime.date | None = None
@@ -53,6 +57,8 @@ class WorkerProfileOut(BaseModel):
     trades: list[str]
     tools: list[str]
     has_insurance: bool
+    bio: str | None
+    years_experience: int
     trust_score: Decimal
     visa_expiry_date: datetime.date | None
     work_restriction: str | None
@@ -68,4 +74,6 @@ class WorkerPublicOut(BaseModel):
     worker_class: WorkerClass
     trades: list[str]
     tools: list[str]
+    bio: str | None
+    years_experience: int
     trust_score: Decimal

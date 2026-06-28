@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String, text
+from sqlalchemy import ForeignKey, Numeric, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -25,6 +25,8 @@ class ContractorProfile(TimestampMixin, Base):
     contact_person: Mapped[str] = mapped_column(String(120), nullable=False)
     prefecture: Mapped[str] = mapped_column(String(64), nullable=False)
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Profile detail (Phase 1 display only).
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Derived display value.
     rating: Mapped[Decimal] = mapped_column(
         Numeric(4, 2), nullable=False, server_default=text("0")
