@@ -54,6 +54,16 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     profile.has_insurance = payload.has_insurance
     profile.bio = payload.bio
     profile.years_experience = payload.years_experience
+    profile.full_name = payload.full_name
+    profile.name_kana = payload.name_kana
+    profile.email = payload.email
+    profile.current_employer = payload.current_employer
+    profile.current_employer_public = payload.current_employer_public
+    profile.prefecture = payload.prefecture
+    profile.area = payload.area
+    profile.work_history = [e.model_dump() for e in payload.work_history]
+    profile.qualifications = payload.qualifications
+    profile.skills = payload.skills
     profile.residence_card_front_doc_id = payload.residence_card_front_doc_id
     profile.residence_card_back_doc_id = payload.residence_card_back_doc_id
     profile.visa_expiry_date = payload.visa_expiry_date

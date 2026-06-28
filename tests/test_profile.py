@@ -61,6 +61,48 @@ def test_contractor_bio_roundtrip(client: TestClient, approved_member: Member) -
     assert pub2["bio"] == "リフォーム専門"
 
 
+def test_worker_extended_profile_and_employer_visibility(
+    client: TestClient, approved_member: Member
+) -> None:
+    onboard = {
+        "nationality": "JP", "worker_class": "employee", "trades": ["大工"],
+        "full_name": "山田 太郎", "name_kana": "ヤマダ タロウ",
+        "email": "taro@example.com",
+        "current_employer": "山田建設", "current_employer_public": False,
+        "prefecture": "Tokyo", "area": "23区",
+        "work_history": [
+            {"company": "ABC工務店", "trade": "大工", "years": 5},
+            {"company": "XYZ建設", "trade": "内装", "years": 3},
+        ],
+        "qualifications": ["技能士2級"], "skills": ["型枠", "墨出し"],
+    }
+    wh, wid = approved_member("worker", "+819077771001", onboard=onboard)
+
+    # Self view (PATCH-able /me) keeps the PII + employer.
+    me = client.get("/api/v1/me", headers=wh).json()["worker_profile"]
+    assert me["full_name"] == "山田 太郎"
+    assert me["email"] == "taro@example.com"
+    assert me["current_employer"] == "山田建設"
+    assert me["work_history"][0] == {"company": "ABC工務店", "trade": "大工", "years": 5}
+    assert me["qualifications"] == ["技能士2級"]
+    assert me["skills"] == ["型枠", "墨出し"]
+
+    # Public view: career data is visible; PII (name/email) is NOT; employer is
+    # hidden because the worker did not opt to make it public.
+    viewer, _ = approved_member("contractor", "+819077771002", onboard=_CONTRACTOR)
+    pub = client.get(f"/api/v1/workers/{wid}", headers=viewer).json()
+    assert pub["prefecture"] == "Tokyo" and pub["area"] == "23区"
+    assert len(pub["work_history"]) == 2
+    assert pub["qualifications"] == ["技能士2級"]
+    assert pub["current_employer"] is None
+    assert "email" not in pub and "full_name" not in pub
+
+    # Opt in to publish the employer → now visible publicly.
+    client.patch("/api/v1/workers/me", json={"current_employer_public": True}, headers=wh)
+    pub2 = client.get(f"/api/v1/workers/{wid}", headers=viewer).json()
+    assert pub2["current_employer"] == "山田建設"
+
+
 def test_bio_and_experience_are_optional(client: TestClient, approved_member: Member) -> None:
     # Onboarding without bio/experience works (permissive defaults).
     wh, wid = approved_member(

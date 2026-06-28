@@ -45,6 +45,16 @@ def worker_out(profile: WorkerProfile, user: User) -> WorkerProfileOut:
         has_insurance=profile.has_insurance,
         bio=profile.bio,
         years_experience=profile.years_experience,
+        full_name=profile.full_name,
+        name_kana=profile.name_kana,
+        email=profile.email,
+        current_employer=profile.current_employer,
+        current_employer_public=profile.current_employer_public,
+        prefecture=profile.prefecture,
+        area=profile.area,
+        work_history=profile.work_history,
+        qualifications=profile.qualifications,
+        skills=profile.skills,
         trust_score=profile.trust_score,
         visa_expiry_date=profile.visa_expiry_date,
         work_restriction=profile.work_restriction,
@@ -122,6 +132,15 @@ def get_worker(
         tools=profile.tools,
         bio=profile.bio,
         years_experience=profile.years_experience,
+        prefecture=profile.prefecture,
+        area=profile.area,
+        # Current employer is shown publicly only if the worker opted in.
+        current_employer=(
+            profile.current_employer if profile.current_employer_public else None
+        ),
+        work_history=profile.work_history,
+        qualifications=profile.qualifications,
+        skills=profile.skills,
         trust_score=profile.trust_score,
     )
 

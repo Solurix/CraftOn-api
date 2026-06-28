@@ -5,10 +5,10 @@ from __future__ import annotations
 import datetime
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -54,6 +54,29 @@ class WorkerProfile(TimestampMixin, Base):
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     years_experience: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
+    )
+
+    # Extended profile (docs/04 §3.1 onboarding spec). PII (full name, kana,
+    # email) is self/admin-only; current employer is shown publicly only when
+    # ``current_employer_public`` is set.
+    full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name_kana: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    current_employer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    current_employer_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    prefecture: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # 職歴: list of {company, trade, years} entries.
+    work_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    qualifications: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
+    )
+    skills: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
     )
     # Derived display value in Phase 1 (automated penalties are P2).
     trust_score: Mapped[Decimal] = mapped_column(
