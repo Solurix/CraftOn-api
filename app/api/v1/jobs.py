@@ -21,7 +21,7 @@ from app.models.job import Job
 from app.models.user import User
 from app.schemas.common import ErrorResponse
 from app.schemas.job import JobCreate, JobOut, JobUpdate
-from app.services import jobs
+from app.services import jobs, saved_jobs
 
 router = APIRouter(tags=["jobs"])
 
@@ -70,6 +70,42 @@ def my_jobs(
     db: Session = Depends(get_db),
 ) -> list[JobOut]:
     return [job_out(db, j) for j in jobs.list_jobs_by_contractor(db, user)]
+
+
+# Saved/bookmarked jobs. These literal paths must be declared before the
+# `/jobs/{job_id}` catch-all so they aren't parsed as a job id.
+@router.get("/jobs/saved", response_model=list[JobOut])
+def list_saved_jobs(
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> list[JobOut]:
+    return [job_out(db, j) for j in saved_jobs.list_saved_jobs(db, user)]
+
+
+@router.get("/jobs/saved-ids", response_model=list[uuid.UUID])
+def list_saved_job_ids(
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> list[uuid.UUID]:
+    return saved_jobs.saved_job_ids(db, user)
+
+
+@router.put("/jobs/{job_id}/save", status_code=204, responses=_ERRORS)
+def save_job(
+    job_id: uuid.UUID,
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> None:
+    saved_jobs.save_job(db, user, job_id)
+
+
+@router.delete("/jobs/{job_id}/save", status_code=204, responses=_ERRORS)
+def unsave_job(
+    job_id: uuid.UUID,
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> None:
+    saved_jobs.unsave_job(db, user, job_id)
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut, responses=_ERRORS)

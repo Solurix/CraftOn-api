@@ -11,6 +11,7 @@ from app.models.matching import Matching
 from app.models.message import Message
 from app.models.notification import Notification
 from app.models.review import Review
+from app.models.saved_job import SavedJob
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 
@@ -24,6 +25,7 @@ __all__ = [
     "Message",
     "Notification",
     "Review",
+    "SavedJob",
     "User",
     "WorkerProfile",
 ]
