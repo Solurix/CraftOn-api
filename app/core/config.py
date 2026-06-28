@@ -152,6 +152,10 @@ FEATURE_FLAG_DEFAULTS: dict[str, bool] = {
     "waitlist_out_of_area": True,
     "contact_mask_enabled": True,  # keep ON — core anti-中抜き value
     "visa_gate_enabled": True,  # keep ON — legal gate
+    # When ON, a user is approved automatically as soon as they finish onboarding
+    # (still subject to the visa/insurance gate), so no manual admin vetting is
+    # needed. Default OFF — manual vetting. Convenient for dev/testing.
+    "auto_approve_users": False,
 }
 
 # Combined registry of every runtime-resolvable key.

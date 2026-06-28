@@ -83,6 +83,49 @@ def approve_user(
     return target
 
 
+def maybe_auto_approve(
+    db: Session, user: User, *, config: ConfigService, today: datetime.date
+) -> bool:
+    """Approve ``user`` automatically when the ``auto_approve_users`` flag is on.
+
+    No-op unless the flag is set and the user is still pending. Honors the same
+    visa gate as manual approval — a worker who can't pass it (e.g. a non-JP
+    worker without a valid visa) is left pending for manual review rather than
+    forced through. Returns whether the user ended up approved.
+    """
+    if user.status is not UserStatus.PENDING:
+        return False
+    if not config.get_bool("auto_approve_users"):
+        return False
+    try:
+        approve_user(db, user, config=config, today=today)
+    except errors.AppError:
+        # Gate failed (visa/insurance/no profile) — keep pending, drop any partial
+        # transaction so the caller's session stays usable.
+        db.rollback()
+        return False
+    return True
+
+
+def approve_all_pending(
+    db: Session, *, config: ConfigService, today: datetime.date
+) -> int:
+    """Approve every pending non-admin user that can pass the gate. Returns count.
+
+    Used when an admin flips ``auto_approve_users`` on, to clear the existing
+    backlog in one shot. Users that can't be approved (no profile yet, failing
+    visa gate) are skipped, not errored.
+    """
+    approved = 0
+    for user in vetting_queue(db):
+        try:
+            approve_user(db, user, config=config, today=today)
+            approved += 1
+        except errors.AppError:
+            db.rollback()
+    return approved
+
+
 def reject_user(db: Session, target: User, *, reason: str | None) -> User:
     """Reject the submitted documents (user stays pending to re-upload)."""
     _set_pending_docs(db, target, DocReviewStatus.REJECTED, reason)

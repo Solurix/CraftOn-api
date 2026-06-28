@@ -243,4 +243,8 @@ def update_config(
     config: ConfigService = Depends(get_config),
 ) -> ConfigOut:
     admin_ops.set_config_overrides(db, payload.updates, updated_by=admin.id)
+    # Turning auto-approval on clears the existing pending backlog immediately,
+    # so the admin doesn't have to approve already-waiting users by hand.
+    if "auto_approve_users" in payload.updates and config.get_bool("auto_approve_users"):
+        vetting.approve_all_pending(db, config=config, today=tokyo_today())
     return ConfigOut(config=config.all_config())

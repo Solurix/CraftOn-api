@@ -8,7 +8,9 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import contractor_user, require_approved, worker_user
+from app.api.deps import contractor_user, get_config, require_approved, worker_user
+from app.core.clock import tokyo_today
+from app.core.config import ConfigService
 from app.db.session import get_db
 from app.models.contractor_profile import ContractorProfile
 from app.models.user import User
@@ -26,7 +28,7 @@ from app.schemas.worker import (
     WorkerProfileUpdate,
     WorkerPublicOut,
 )
-from app.services import onboarding
+from app.services import onboarding, vetting
 
 router = APIRouter(tags=["onboarding"])
 
@@ -82,8 +84,11 @@ def onboard_worker(
     payload: WorkerOnboardingIn,
     user: User = Depends(worker_user),
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> WorkerProfileOut:
     profile = onboarding.onboard_worker(db, user, payload)
+    # Skip the manual vetting step when the admin has enabled auto-approval.
+    vetting.maybe_auto_approve(db, user, config=config, today=tokyo_today())
     return worker_out(profile, user)
 
 
@@ -92,8 +97,10 @@ def onboard_contractor(
     payload: ContractorOnboardingIn,
     user: User = Depends(contractor_user),
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> ContractorProfileOut:
     profile = onboarding.onboard_contractor(db, user, payload)
+    vetting.maybe_auto_approve(db, user, config=config, today=tokyo_today())
     return contractor_out(profile, user)
 
 
