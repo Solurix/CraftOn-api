@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import errors
-from app.models.enums import UserType
+from app.models.enums import MatchingStatus, UserType
 from app.models.job import Job
 from app.models.matching import Matching
 from app.models.user import User
@@ -40,4 +40,24 @@ def list_my_matchings(db: Session, user: User) -> list[Matching]:
             .where(Job.contractor_id == user.id)
         )
     stmt = stmt.order_by(Matching.created_at.desc())
+    return list(db.scalars(stmt).all())
+
+
+def list_worker_history(db: Session, worker: User) -> list[Matching]:
+    """A worker's COMPLETED matchings, most recent work date first (track record)."""
+    stmt = (
+        select(Matching)
+        .join(Job, Matching.job_id == Job.id)
+        .where(
+            Matching.worker_id == worker.id,
+            Matching.status == MatchingStatus.COMPLETED,
+        )
+        # Most recent work date first; within a day, most recently completed
+        # first. The UUID PK is a final, unique tiebreaker for stable ordering.
+        .order_by(
+            Job.work_date.desc(),
+            Matching.completed_at.desc(),
+            Matching.id.asc(),
+        )
+    )
     return list(db.scalars(stmt).all())

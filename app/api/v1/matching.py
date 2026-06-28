@@ -25,7 +25,7 @@ from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 from app.schemas.application import ApplicantOut, ApplicationOut
 from app.schemas.common import ErrorResponse
-from app.schemas.matching import MatchingOut
+from app.schemas.matching import MatchingOut, WorkHistoryOut
 from app.services import applications, lifecycle, matchings, terms
 
 router = APIRouter(tags=["matching"])
@@ -153,6 +153,21 @@ def my_matchings(
 ) -> list[MatchingOut]:
     rows = matchings.list_my_matchings(db, user)
     return [matching_out(db, m, locale=user.preferred_language) for m in rows]
+
+
+# Literal path declared before the /matchings/{matching_id} catch-all.
+@router.get("/matchings/history", response_model=WorkHistoryOut)
+def my_work_history(
+    user: User = Depends(approved_worker),
+    db: Session = Depends(get_db),
+) -> WorkHistoryOut:
+    rows = matchings.list_worker_history(db, user)
+    out = [matching_out(db, m, locale=user.preferred_language) for m in rows]
+    return WorkHistoryOut(
+        completed_count=len(out),
+        total_earned=sum(m.daily_wage for m in out),
+        matchings=out,
+    )
 
 
 @router.get("/matchings/{matching_id}", response_model=MatchingOut, responses=_ERRORS)

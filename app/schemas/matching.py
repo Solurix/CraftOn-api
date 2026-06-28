@@ -36,3 +36,11 @@ class MatchingOut(BaseModel):
     prefecture: str | None = None
     # Generated, localized placeholder contract terms (docs/08), computed on read.
     terms: str | None = None
+
+
+class WorkHistoryOut(BaseModel):
+    """A worker's completed-work record + headline totals (informational)."""
+
+    completed_count: int
+    total_earned: int  # JPY, sum of agreed daily wages for completed jobs
+    matchings: list[MatchingOut]
