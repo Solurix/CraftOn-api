@@ -85,6 +85,11 @@ def update_worker(db: Session, user: User, payload: WorkerProfileUpdate) -> Work
         user.display_name = data.pop("display_name")
     else:
         data.pop("display_name", None)
+    # Ignore explicit nulls for NOT NULL columns (exclude_unset keeps them);
+    # setting them would raise an IntegrityError on commit.
+    for non_nullable in ("nationality", "worker_class"):
+        if data.get(non_nullable) is None:
+            data.pop(non_nullable, None)
     for doc_field in ("residence_card_front_doc_id", "residence_card_back_doc_id"):
         if doc_field in data:
             _validate_owned_doc(db, user, data[doc_field])

@@ -103,6 +103,44 @@ def test_worker_extended_profile_and_employer_visibility(
     assert pub2["current_employer"] == "山田建設"
 
 
+def test_patch_explicit_null_nationality_is_ignored(
+    client: TestClient, approved_member: Member
+) -> None:
+    # Explicit nulls for the NOT NULL nationality/worker_class columns must be
+    # dropped (not setattr'd), so the PATCH succeeds instead of 500-ing.
+    wh, _ = approved_member(
+        "worker", "+819077772001",
+        onboard={"nationality": "JP", "worker_class": "employee"},
+    )
+    resp = client.patch(
+        "/api/v1/workers/me",
+        json={"nationality": None, "worker_class": None, "bio": "更新"},
+        headers=wh,
+    )
+    assert resp.status_code == 200, resp.text
+    me = client.get("/api/v1/me", headers=wh).json()["worker_profile"]
+    assert me["nationality"] == "JP" and me["worker_class"] == "employee"
+    assert me["bio"] == "更新"
+
+
+def test_work_history_blank_company_does_not_break_read(
+    client: TestClient, approved_member: Member
+) -> None:
+    # A stored work-history row with a blank company must still serialize on read.
+    wh, wid = approved_member(
+        "worker", "+819077772002",
+        onboard={
+            "nationality": "JP", "worker_class": "employee",
+            "work_history": [{"company": "", "trade": "大工", "years": 2}],
+        },
+    )
+    me = client.get("/api/v1/me", headers=wh)
+    assert me.status_code == 200, me.text
+    assert me.json()["worker_profile"]["work_history"][0]["trade"] == "大工"
+    viewer, _ = approved_member("contractor", "+819077772003", onboard=_CONTRACTOR)
+    assert client.get(f"/api/v1/workers/{wid}", headers=viewer).status_code == 200
+
+
 def test_bio_and_experience_are_optional(client: TestClient, approved_member: Member) -> None:
     # Onboarding without bio/experience works (permissive defaults).
     wh, wid = approved_member(

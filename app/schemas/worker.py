@@ -12,9 +12,14 @@ from app.models.enums import UserStatus, WorkerClass
 
 
 class WorkHistoryEntry(BaseModel):
-    """A single past job in a worker's 職歴 (career history)."""
+    """A single past job in a worker's 職歴 (career history).
 
-    company: str = Field(min_length=1, max_length=255)
+    Used for both input and output. Kept permissive (no min_length) so a stored
+    row never fails OUT-serialization; the web/service drop blank-company rows on
+    write.
+    """
+
+    company: str = Field(default="", max_length=255)
     trade: str = Field(default="", max_length=120)
     years: int = Field(default=0, ge=0, le=80)
 
