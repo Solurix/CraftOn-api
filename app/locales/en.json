@@ -6,6 +6,8 @@
   "error.internal": "A server error occurred. Please try again later.",
   "error.auth.invalid_token": "Your login is invalid. Please sign in again.",
   "error.auth.no_phone": "Could not determine your phone number.",
+  "error.auth.invalid_credentials": "Incorrect phone number or password.",
+  "error.auth.password_login_unsupported": "Password login is not available in this environment.",
   "error.user.role_required": "Signing up requires choosing a role (worker or contractor).",
   "error.user.invalid_role": "The selected role is not valid.",
   "error.user.suspended": "This account is suspended. Please contact support.",

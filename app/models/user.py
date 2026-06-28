@@ -30,6 +30,9 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     preferred_language: Mapped[str] = mapped_column(
         String(8), nullable=False, server_default=text("'ja'")
     )
+    # Optional password for returning logins (OTP still used for new devices).
+    # PBKDF2 hash; null until the user sets a password.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     worker_profile: Mapped[WorkerProfile | None] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

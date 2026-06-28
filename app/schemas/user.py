@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import UserStatus, UserType
 from app.schemas.contractor import ContractorProfileOut
@@ -42,9 +42,28 @@ class SessionOut(BaseModel):
     created: bool
 
 
+class SetPasswordIn(BaseModel):
+    """Set/replace the current user's password (for OTP-free returning logins)."""
+
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordLoginIn(BaseModel):
+    phone_number: str
+    password: str
+
+
+class PasswordLoginOut(BaseModel):
+    """A bearer token (accepted by the API verifier) + the signed-in user."""
+
+    token: str
+    user: UserOut
+
+
 class MeOut(BaseModel):
     user: UserOut
     has_worker_profile: bool = False
     has_contractor_profile: bool = False
+    has_password: bool = False
     worker_profile: WorkerProfileOut | None = None
     contractor_profile: ContractorProfileOut | None = None

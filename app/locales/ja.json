@@ -6,6 +6,8 @@
   "error.internal": "サーバーエラーが発生しました。しばらくしてからお試しください。",
   "error.auth.invalid_token": "ログイン情報が無効です。再度ログインしてください。",
   "error.auth.no_phone": "電話番号が確認できませんでした。",
+  "error.auth.invalid_credentials": "電話番号またはパスワードが正しくありません。",
+  "error.auth.password_login_unsupported": "この環境ではパスワードログインを利用できません。",
   "error.user.role_required": "新規登録には職種（worker または contractor）の選択が必要です。",
   "error.user.invalid_role": "選択された職種が正しくありません。",
   "error.user.suspended": "アカウントが停止されています。サポートにお問い合わせください。",

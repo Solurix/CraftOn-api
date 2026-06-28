@@ -11,14 +11,23 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_claims, get_current_user
-from app.core import errors
-from app.core.auth import FirebaseClaims
+from app.core import errors, security
+from app.core.auth import FirebaseClaims, make_fake_token
+from app.core.config import AuthMode, get_settings
 from app.core.i18n import resolve_locale
 from app.db.session import get_db
 from app.models.enums import UserType
 from app.models.user import User
 from app.schemas.common import ErrorResponse
-from app.schemas.user import MeOut, SessionCreateIn, SessionOut, UserOut
+from app.schemas.user import (
+    MeOut,
+    PasswordLoginIn,
+    PasswordLoginOut,
+    SessionCreateIn,
+    SessionOut,
+    SetPasswordIn,
+    UserOut,
+)
 
 router = APIRouter(tags=["auth"])
 
@@ -79,6 +88,49 @@ def create_session(
     return SessionOut(user=UserOut.model_validate(user), created=True)
 
 
+@router.post(
+    "/auth/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: {"model": ErrorResponse}},
+)
+def set_password(
+    payload: SetPasswordIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Set/replace the caller's password (used for OTP-free returning logins)."""
+    user.password_hash = security.hash_password(payload.password)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/auth/password-login",
+    response_model=PasswordLoginOut,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+)
+def password_login(
+    payload: PasswordLoginIn,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> PasswordLoginOut:
+    """Phone + password → a bearer token, skipping OTP. Returns the same token
+    format the API verifier accepts. (Real Firebase password exchange is a later
+    GCP concern; only the fake/dev verifier can mint tokens here.)"""
+    if get_settings().auth_mode is not AuthMode.FAKE:
+        raise errors.bad_request(
+            "password_login_unsupported", "error.auth.password_login_unsupported"
+        )
+    user = db.scalar(select(User).where(User.phone_number == payload.phone_number))
+    if user is None or not security.verify_password(payload.password, user.password_hash):
+        raise errors.unauthorized("error.auth.invalid_credentials")
+    request.state.locale = user.preferred_language
+    return PasswordLoginOut(
+        token=make_fake_token(user.phone_number),
+        user=UserOut.model_validate(user),
+    )
+
+
 @router.get("/me", response_model=MeOut, responses={401: {"model": ErrorResponse}})
 def get_me(user: User = Depends(get_current_user)) -> MeOut:
     """Current user + their profile (if onboarded)."""
@@ -96,6 +148,7 @@ def get_me(user: User = Depends(get_current_user)) -> MeOut:
         user=UserOut.model_validate(user),
         has_worker_profile=worker is not None,
         has_contractor_profile=contractor is not None,
+        has_password=user.password_hash is not None,
         worker_profile=worker,
         contractor_profile=contractor,
     )
