@@ -23,6 +23,12 @@ def hash_password(password: str) -> str:
     )
 
 
+# A throwaway hash to verify against on negative login paths (unknown user / no
+# password set) so every attempt spends the same KDF cost — closes the timing
+# side-channel that would otherwise enumerate accounts. See auth.password_login.
+DUMMY_HASH = hash_password(base64.b64encode(os.urandom(16)).decode())
+
+
 def verify_password(password: str, stored: str | None) -> bool:
     if not stored:
         return False

@@ -28,6 +28,7 @@ def touch_device(
 ) -> None:
     """Upsert the (user, device) row; 401 if the device has been revoked."""
     device_id = device_id[:64]
+    label = label[:255] if label else None
     row = db.scalar(
         select(Device).where(
             Device.user_id == user.id, Device.device_id == device_id
@@ -37,14 +38,14 @@ def touch_device(
         if row.revoked:
             raise errors.unauthorized("error.auth.device_revoked")
         if label and row.label != label:
-            row.label = label[:255]
+            row.label = label
             db.commit()
         elif now - row.last_seen_at >= _FRESH:
             row.last_seen_at = now
             db.commit()
         return
 
-    db.add(Device(user_id=user.id, device_id=device_id, label=(label or None), last_seen_at=now))
+    db.add(Device(user_id=user.id, device_id=device_id, label=label, last_seen_at=now))
     try:
         db.commit()
     except IntegrityError:

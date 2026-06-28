@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_claims, get_current_user
+from app.api.deps import get_claims, get_current_user, require_active
 from app.core import errors, security
 from app.core.auth import FirebaseClaims, make_fake_token
 from app.core.config import AuthMode, get_settings
@@ -95,10 +95,14 @@ def create_session(
 )
 def set_password(
     payload: SetPasswordIn,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_active),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Set/replace the caller's password (used for OTP-free returning logins)."""
+    """Set/replace the caller's password (used for OTP-free returning logins).
+
+    Gated behind ``require_active`` so a suspended account cannot establish or
+    rotate credentials.
+    """
     user.password_hash = security.hash_password(payload.password)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -116,13 +120,23 @@ def password_login(
 ) -> PasswordLoginOut:
     """Phone + password → a bearer token, skipping OTP. Returns the same token
     format the API verifier accepts. (Real Firebase password exchange is a later
-    GCP concern; only the fake/dev verifier can mint tokens here.)"""
+    GCP concern; only the fake/dev verifier can mint tokens here.)
+
+    SECURITY — before enabling this path in any non-dev environment (i.e. lifting
+    the AuthMode.FAKE gate) these must be in place: per-phone + per-IP rate
+    limiting / lockout on failed attempts (config-driven), and short-lived signed
+    tokens bound to the device record so revocation invalidates them server-side.
+    """
     if get_settings().auth_mode is not AuthMode.FAKE:
         raise errors.bad_request(
             "password_login_unsupported", "error.auth.password_login_unsupported"
         )
     user = db.scalar(select(User).where(User.phone_number == payload.phone_number))
-    if user is None or not security.verify_password(payload.password, user.password_hash):
+    # Always run one full KDF (against a dummy hash on the negative paths) so the
+    # response time doesn't reveal whether the account exists / has a password.
+    stored = user.password_hash if user is not None else None
+    ok = security.verify_password(payload.password, stored or security.DUMMY_HASH)
+    if user is None or stored is None or not ok:
         raise errors.unauthorized("error.auth.invalid_credentials")
     request.state.locale = user.preferred_language
     return PasswordLoginOut(

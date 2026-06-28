@@ -60,6 +60,17 @@ def test_devices_are_per_user(client: TestClient, auth_headers: Headers) -> None
     assert client.get("/api/v1/me/devices", headers=h2).json() == []
 
 
+def test_long_device_name_is_truncated_not_500(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    h = auth_headers("+819013330020")
+    _signup(client, h)
+    dev = {**h, "X-Device-Id": "longname", "X-Device-Name": "X" * 1000}
+    assert client.get("/api/v1/me", headers=dev).status_code == 200
+    listed = client.get("/api/v1/me/devices", headers=dev).json()
+    assert listed[0]["label"] is not None and len(listed[0]["label"]) == 255
+
+
 def test_cannot_revoke_another_users_device(
     client: TestClient, auth_headers: Headers
 ) -> None:

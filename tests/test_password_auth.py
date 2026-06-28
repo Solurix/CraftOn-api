@@ -86,3 +86,18 @@ def test_set_password_min_length_enforced(
     h = auth_headers(phone)
     _signup(client, h, phone)
     assert client.post("/api/v1/auth/password", json={"password": "short"}, headers=h).status_code == 422
+
+
+def test_suspended_account_cannot_set_password(
+    client: TestClient, auth_headers: Headers, seed_admin: Callable[..., dict[str, str]]
+) -> None:
+    phone = "+819012340005"
+    h = auth_headers(phone)
+    _signup(client, h, phone)
+    uid = client.get("/api/v1/me", headers=h).json()["user"]["id"]
+    admin = seed_admin()
+    client.post(f"/api/v1/admin/users/{uid}/suspend", json={"suspend": True}, headers=admin)
+    # A suspended account may not establish/rotate credentials.
+    assert client.post(
+        "/api/v1/auth/password", json={"password": "longenough"}, headers=h
+    ).status_code == 403
