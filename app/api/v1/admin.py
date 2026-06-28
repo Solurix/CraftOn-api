@@ -91,6 +91,7 @@ def _admin_matching_out(db: Session, matching: Matching) -> MatchingOut:
     job = db.get(Job, matching.job_id)
     worker = db.get(User, matching.worker_id)
     company = db.get(ContractorProfile, job.contractor_id) if job else None
+    out.contractor_id = job.contractor_id if job else None
     out.worker_display_name = worker.display_name if worker else None
     out.contractor_company_name = company.company_name if company else None
     out.work_date = job.work_date if job else None

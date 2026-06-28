@@ -29,6 +29,7 @@ class MatchingOut(BaseModel):
     updated_at: datetime.datetime
 
     # Convenience fields populated by the router (not columns).
+    contractor_id: uuid.UUID | None = None
     worker_display_name: str | None = None
     contractor_company_name: str | None = None
     work_date: datetime.date | None = None
