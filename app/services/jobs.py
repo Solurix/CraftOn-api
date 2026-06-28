@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -110,12 +111,34 @@ def cancel_job(db: Session, contractor: User, job_id: uuid.UUID) -> Job:
     return job
 
 
+def _job_ordering(sort: str | None) -> tuple[Any, ...]:
+    """Map a sort key to ORDER BY columns; unknown keys fall back to soonest-first.
+
+    Every ordering ends with the UUID primary key as a final, unique tiebreaker so
+    the sort is total and limit/offset pagination is stable (no rows skipped or
+    repeated across pages when the leading columns tie).
+    """
+    if sort == "wage_high":
+        return (Job.daily_wage.desc(), Job.work_date.asc(), Job.id.asc())
+    if sort == "wage_low":
+        return (Job.daily_wage.asc(), Job.work_date.asc(), Job.id.asc())
+    if sort == "new":
+        return (Job.created_at.desc(), Job.id.asc())
+    # default "date": soonest work date first, newest posting as tiebreaker
+    return (Job.work_date.asc(), Job.created_at.desc(), Job.id.asc())
+
+
 def list_open_jobs(
     db: Session,
     *,
     trade: str | None = None,
     work_date: datetime.date | None = None,
     prefecture: str | None = None,
+    wage_min: int | None = None,
+    wage_max: int | None = None,
+    date_from: datetime.date | None = None,
+    date_to: datetime.date | None = None,
+    sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Job]:
@@ -124,9 +147,17 @@ def list_open_jobs(
         stmt = stmt.where(Job.prefecture == prefecture)
     if work_date:
         stmt = stmt.where(Job.work_date == work_date)
+    if date_from:
+        stmt = stmt.where(Job.work_date >= date_from)
+    if date_to:
+        stmt = stmt.where(Job.work_date <= date_to)
+    if wage_min is not None:
+        stmt = stmt.where(Job.daily_wage >= wage_min)
+    if wage_max is not None:
+        stmt = stmt.where(Job.daily_wage <= wage_max)
     if trade:
         stmt = stmt.where(Job.trades.contains([trade]))  # postgres array @> [trade]
-    stmt = stmt.order_by(Job.work_date.asc(), Job.created_at.desc()).limit(limit).offset(offset)
+    stmt = stmt.order_by(*_job_ordering(sort)).limit(limit).offset(offset)
     return list(db.scalars(stmt).all())
 
 

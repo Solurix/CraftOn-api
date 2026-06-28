@@ -65,6 +65,58 @@ def test_worker_searches_open_jobs_with_filters(
     assert len(daiku) == 1 and daiku[0]["prefecture"] == "Tokyo"
 
 
+def test_search_wage_and_date_range_and_sort(
+    client: TestClient, approved_member: Member
+) -> None:
+    ch, _ = approved_member("contractor", "+819033339001", onboard=_CONTRACTOR_ONBOARD)
+    # Three open jobs with distinct wages and dates.
+    client.post("/api/v1/jobs", json={**_JOB, "daily_wage": 12000, "work_date": "2026-07-01"}, headers=ch)
+    client.post("/api/v1/jobs", json={**_JOB, "daily_wage": 18000, "work_date": "2026-07-05"}, headers=ch)
+    client.post("/api/v1/jobs", json={**_JOB, "daily_wage": 25000, "work_date": "2026-07-10"}, headers=ch)
+
+    wh, _ = approved_member("worker", "+819033339002", onboard=_WORKER_ONBOARD)
+
+    # Wage range (inclusive).
+    wage = client.get("/api/v1/jobs", params={"wage_min": 15000, "wage_max": 20000}, headers=wh).json()
+    assert [j["daily_wage"] for j in wage] == [18000]
+
+    # Date range (inclusive).
+    dated = client.get(
+        "/api/v1/jobs", params={"date_from": "2026-07-04", "date_to": "2026-07-10"}, headers=wh
+    ).json()
+    assert {j["work_date"] for j in dated} == {"2026-07-05", "2026-07-10"}
+
+    # Sort by wage, high to low.
+    high = client.get("/api/v1/jobs", params={"sort": "wage_high"}, headers=wh).json()
+    assert [j["daily_wage"] for j in high] == [25000, 18000, 12000]
+    low = client.get("/api/v1/jobs", params={"sort": "wage_low"}, headers=wh).json()
+    assert [j["daily_wage"] for j in low] == [12000, 18000, 25000]
+
+
+def test_search_invalid_sort_rejected(
+    client: TestClient, approved_member: Member
+) -> None:
+    wh, _ = approved_member("worker", "+819033339003", onboard=_WORKER_ONBOARD)
+    assert client.get("/api/v1/jobs", params={"sort": "bogus"}, headers=wh).status_code == 422
+
+
+def test_search_pagination_is_stable_across_ties(
+    client: TestClient, approved_member: Member
+) -> None:
+    # Two jobs tied on the sort columns (same wage + work_date) must paginate
+    # deterministically: limit=1 across offsets returns each exactly once.
+    ch, _ = approved_member("contractor", "+819033339004", onboard=_CONTRACTOR_ONBOARD)
+    client.post("/api/v1/jobs", json={**_JOB, "daily_wage": 20000, "work_date": "2026-09-01"}, headers=ch)
+    client.post("/api/v1/jobs", json={**_JOB, "daily_wage": 20000, "work_date": "2026-09-01"}, headers=ch)
+
+    wh, _ = approved_member("worker", "+819033339005", onboard=_WORKER_ONBOARD)
+    p = {"sort": "wage_high", "limit": 1}
+    page1 = client.get("/api/v1/jobs", params={**p, "offset": 0}, headers=wh).json()
+    page2 = client.get("/api/v1/jobs", params={**p, "offset": 1}, headers=wh).json()
+    assert len(page1) == 1 and len(page2) == 1
+    assert page1[0]["id"] != page2[0]["id"]  # disjoint pages, no row repeated/skipped
+
+
 def test_invalid_times_rejected(client: TestClient, approved_member: Member) -> None:
     h, _ = approved_member("contractor", "+819033330005", onboard=_CONTRACTOR_ONBOARD)
     resp = client.post(

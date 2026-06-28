@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -55,11 +55,26 @@ def search_jobs(
     trade: str | None = Query(default=None),
     work_date: datetime.date | None = Query(default=None),
     prefecture: str | None = Query(default=None),
+    wage_min: int | None = Query(default=None, ge=0, description="JPY, inclusive"),
+    wage_max: int | None = Query(default=None, ge=0, description="JPY, inclusive"),
+    date_from: datetime.date | None = Query(default=None, description="work_date >= "),
+    date_to: datetime.date | None = Query(default=None, description="work_date <= "),
+    sort: Literal["date", "wage_high", "wage_low", "new"] = Query(default="date"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> list[JobOut]:
     found = jobs.list_open_jobs(
-        db, trade=trade, work_date=work_date, prefecture=prefecture, limit=limit, offset=offset
+        db,
+        trade=trade,
+        work_date=work_date,
+        prefecture=prefecture,
+        wage_min=wage_min,
+        wage_max=wage_max,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        limit=limit,
+        offset=offset,
     )
     return [job_out(db, j) for j in found]
 
