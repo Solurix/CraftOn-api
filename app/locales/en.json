@@ -23,6 +23,7 @@
   "error.job.not_cancelable": "This job cannot be canceled.",
   "error.application.job_not_open": "This job is not currently accepting applications.",
   "error.admin.user_exists": "A user with this phone number already exists.",
+  "error.admin.debug_disabled": "Debug tools are disabled in this environment.",
   "error.application.already_applied": "You have already applied to this job.",
   "error.application.not_pending": "This application cannot be acted on in its current state.",
   "error.matching.illegal_transition": "Cannot change status from \"{current}\" to \"{target}\".",

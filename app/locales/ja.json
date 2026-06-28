@@ -23,6 +23,7 @@
   "error.job.not_cancelable": "この求人はキャンセルできません。",
   "error.application.job_not_open": "この求人は現在応募を受け付けていません。",
   "error.admin.user_exists": "この電話番号のユーザーは既に存在します。",
+  "error.admin.debug_disabled": "この環境ではデバッグ機能は無効です。",
   "error.application.already_applied": "すでにこの求人に応募しています。",
   "error.application.not_pending": "この応募は現在の状態では操作できません。",
   "error.matching.illegal_transition": "現在の状態（{current}）から「{target}」へは変更できません。",

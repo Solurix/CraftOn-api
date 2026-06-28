@@ -20,6 +20,20 @@ class AdminCreateIn(BaseModel):
     preferred_language: str = Field(default="ja", min_length=2, max_length=8)
 
 
+class DebugSeedIn(BaseModel):
+    """How many random records to create (debug/non-prod only)."""
+
+    workers: int = Field(default=5, ge=0, le=100)
+    contractors: int = Field(default=3, ge=0, le=50)
+    jobs: int = Field(default=10, ge=0, le=200)
+
+
+class DebugSeedOut(BaseModel):
+    workers: int
+    contractors: int
+    jobs: int
+
+
 class RejectIn(BaseModel):
     reason: str | None = None
 

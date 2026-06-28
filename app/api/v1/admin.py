@@ -16,7 +16,7 @@ from app.api.deps import admin_user, get_config, get_storage_service
 from app.api.v1.onboarding import contractor_out, worker_out
 from app.core import errors
 from app.core.clock import tokyo_today
-from app.core.config import ConfigService
+from app.core.config import AuthMode, ConfigService, get_settings
 from app.core.storage import StorageService
 from app.db.session import get_db
 from app.models.contractor_profile import ContractorProfile
@@ -30,6 +30,8 @@ from app.schemas.admin import (
     AdminCreateIn,
     ConfigOut,
     ConfigUpdateIn,
+    DebugSeedIn,
+    DebugSeedOut,
     RejectIn,
     SuspendIn,
     VettingItem,
@@ -40,7 +42,7 @@ from app.schemas.document import DocumentWithUrlOut
 from app.schemas.job import JobOut
 from app.schemas.matching import MatchingOut
 from app.schemas.user import UserOut
-from app.services import admin_ops, jobs, vetting
+from app.services import admin_ops, debug_seed, jobs, vetting
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(admin_user)])
 
@@ -205,6 +207,25 @@ def mark_fee_paid(
     db: Session = Depends(get_db),
 ) -> MatchingOut:
     return MatchingOut.model_validate(admin_ops.mark_fee_paid(db, matching_id))
+
+
+# -- debug tools (non-production only) -------------------------------------
+
+@router.post(
+    "/admin/debug/seed", response_model=DebugSeedOut,
+    responses={403: {"model": ErrorResponse}},
+)
+def debug_seed_data(
+    payload: DebugSeedIn,
+    db: Session = Depends(get_db),
+) -> DebugSeedOut:
+    # Guard: only available with fake auth (dev/CI), never in production.
+    if get_settings().auth_mode is not AuthMode.FAKE:
+        raise errors.forbidden("error.admin.debug_disabled")
+    counts = debug_seed.seed_random_data(
+        db, workers=payload.workers, contractors=payload.contractors, jobs=payload.jobs
+    )
+    return DebugSeedOut(**counts)
 
 
 # -- config & flags --------------------------------------------------------
