@@ -49,7 +49,11 @@ def _default_display_name(phone_number: str) -> str:
 @router.post(
     "/auth/session",
     response_model=SessionOut,
-    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def create_session(
     request: Request,

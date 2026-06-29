@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 
+from tests.factories import signup_payload
+
 Member = Callable[..., tuple[dict[str, str], str]]
 Admin = Callable[..., dict[str, str]]
 
@@ -114,7 +116,7 @@ def test_account_approved_notification(
     wh = auth_headers(next(_phone))
     uid = client.post(
         "/api/v1/auth/session",
-        json={"user_type": "worker", "display_name": "Taro"},
+        json=signup_payload(user_type="worker", display_name="Taro"),
         headers=wh,
     ).json()["user"]["id"]
     client.post("/api/v1/onboarding/worker", json=_WORKER, headers=wh)

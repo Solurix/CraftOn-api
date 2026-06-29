@@ -26,7 +26,7 @@ docs first** — this file only pins the essentials and the API-local convention
 | Language/runtime | Python 3.11, **FastAPI** |
 | ORM / migrations | **SQLAlchemy 2.0 + Alembic** (every schema change is a migration) |
 | DB | **PostgreSQL** (Cloud SQL), `asia-northeast1` |
-| Auth | **Firebase Auth** phone OTP; API verifies the Firebase ID token (Bearer), stateless |
+| Auth | Identifier (username/email/phone)+password login → **API-issued HS256 session token** (Bearer); Firebase phone OTP **only at registration** (ADR 0009); stateless |
 | Money | integer **JPY**, never floats |
 | Time | store **UTC**; business rules in **Asia/Tokyo** |
 | IDs | **UUID v4** primary keys |

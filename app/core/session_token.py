@@ -45,7 +45,7 @@ class SessionClaims:
     raw: dict[str, Any]
 
 
-class InvalidSessionToken(Exception):
+class InvalidSessionTokenError(Exception):
     """Raised when a session token fails verification (bad signature/expiry/shape)."""
 
 
@@ -81,40 +81,40 @@ def issue_session_token(user: User, *, now: int | None = None) -> str:
 
 
 def verify_session_token(token: str, *, now: int | None = None) -> SessionClaims:
-    """Verify signature + expiry and return the claims, or raise InvalidSessionToken."""
+    """Verify signature + expiry and return the claims, or raise InvalidSessionTokenError."""
     settings = get_settings()
     try:
         header_seg, payload_seg, sig = token.strip().split(".")
     except ValueError as exc:
-        raise InvalidSessionToken("malformed token") from exc
+        raise InvalidSessionTokenError("malformed token") from exc
 
     signing_input = f"{header_seg}.{payload_seg}".encode("ascii")
     expected = _sign(signing_input, settings.session_secret)
     if not hmac.compare_digest(expected, sig):
-        raise InvalidSessionToken("bad signature")
+        raise InvalidSessionTokenError("bad signature")
 
     try:
         payload = json.loads(_b64url_decode(payload_seg))
     except (ValueError, json.JSONDecodeError) as exc:
-        raise InvalidSessionToken("malformed payload") from exc
+        raise InvalidSessionTokenError("malformed payload") from exc
 
     if not isinstance(payload, dict) or payload.get("iss") != _ISS:
-        raise InvalidSessionToken("unexpected issuer")
+        raise InvalidSessionTokenError("unexpected issuer")
 
     current = int(now if now is not None else time.time())
     exp = payload.get("exp")
     if not isinstance(exp, int) or current >= exp:
-        raise InvalidSessionToken("expired")
+        raise InvalidSessionTokenError("expired")
 
     sub = payload.get("sub")
     phone = payload.get("phone_number")
     if not sub or not phone:
-        raise InvalidSessionToken("missing subject")
+        raise InvalidSessionTokenError("missing subject")
     # Reject a syntactically invalid subject early (defends downstream lookups).
     try:
         uuid.UUID(str(sub))
     except ValueError as exc:
-        raise InvalidSessionToken("invalid subject") from exc
+        raise InvalidSessionTokenError("invalid subject") from exc
 
     return SessionClaims(
         sub=str(sub),

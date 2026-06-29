@@ -6,13 +6,15 @@ from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 
+from tests.factories import signup_payload
+
 Headers = Callable[..., dict[str, str]]
 
 
 def _signup(client: TestClient, headers: dict[str, str], role: str, name: str) -> dict:
     resp = client.post(
         "/api/v1/auth/session",
-        json={"user_type": role, "display_name": name},
+        json=signup_payload(user_type=role, display_name=name),
         headers=headers,
     )
     assert resp.status_code in (200, 201), resp.text

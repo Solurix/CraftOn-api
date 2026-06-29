@@ -6,6 +6,8 @@ from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 
+from tests.factories import signup_payload
+
 Headers = Callable[..., dict[str, str]]
 Admin = Callable[..., dict[str, str]]
 
@@ -13,7 +15,7 @@ Admin = Callable[..., dict[str, str]]
 def _signup(client: TestClient, headers: dict[str, str]) -> None:
     client.post(
         "/api/v1/auth/session",
-        json={"user_type": "worker", "display_name": "Dev User"},
+        json=signup_payload(user_type="worker", display_name="Dev User"),
         headers=headers,
     )
 

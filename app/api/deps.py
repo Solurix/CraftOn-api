@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core import errors
 from app.core.auth import FirebaseClaims, InvalidTokenError, get_verifier
 from app.core.config import ConfigService
-from app.core.session_token import InvalidSessionToken, verify_session_token
+from app.core.session_token import InvalidSessionTokenError, verify_session_token
 from app.db.session import get_db
 from app.models.enums import UserType
 from app.models.user import User
@@ -22,7 +22,9 @@ if TYPE_CHECKING:
     from app.core.storage import StorageService
 
 # auto_error=False so we can return our own localized error envelope.
-_bearer = HTTPBearer(auto_error=False, description="Firebase ID token")
+_bearer = HTTPBearer(
+    auto_error=False, description="App session token (or, at registration, a Firebase ID token)"
+)
 
 
 def get_config(db: Session = Depends(get_db)) -> ConfigService:
@@ -53,7 +55,7 @@ def get_claims(
         return FirebaseClaims(
             uid=session.sub, phone_number=session.phone_number, raw=session.raw
         )
-    except InvalidSessionToken:
+    except InvalidSessionTokenError:
         pass  # Not one of our tokens — try the OTP verifier (registration path).
     try:
         return get_verifier().verify(token)
