@@ -5,11 +5,12 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core import errors
+from app.core import errors, security
 from app.core.config import CONFIG_DEFAULTS
+from app.core.identifiers import normalize_email, normalize_username
 from app.models.app_config import AppConfig
 from app.models.enums import FeeStatus, JobStatus, MatchingStatus, UserStatus, UserType
 from app.models.job import Job
@@ -28,18 +29,42 @@ def list_admins(db: Session) -> list[User]:
 
 
 def create_admin(
-    db: Session, *, phone_number: str, display_name: str, preferred_language: str = "ja"
+    db: Session,
+    *,
+    phone_number: str,
+    username: str,
+    email: str,
+    password: str,
+    display_name: str,
+    preferred_language: str = "ja",
 ) -> User:
-    """Create a new, already-approved admin account (admin-only action)."""
-    existing = db.scalar(select(User).where(User.phone_number == phone_number))
-    if existing is not None:
+    """Create a new, already-approved admin account (admin-only action).
+
+    The admin signs in like any other user: identifier (username/email/phone) +
+    password.
+    """
+    username = normalize_username(username)
+    email = normalize_email(email)
+    clash = db.scalar(
+        select(User).where(
+            or_(
+                User.phone_number == phone_number,
+                User.username == username,
+                User.email == email,
+            )
+        )
+    )
+    if clash is not None:
         raise errors.conflict("user_exists", "error.admin.user_exists")
     admin = User(
         phone_number=phone_number,
+        username=username,
+        email=email,
         user_type=UserType.ADMIN,
         status=UserStatus.APPROVED,
         display_name=display_name,
         preferred_language=preferred_language,
+        password_hash=security.hash_password(password),
     )
     db.add(admin)
     db.commit()

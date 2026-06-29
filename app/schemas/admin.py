@@ -13,9 +13,12 @@ from app.schemas.worker import WorkerProfileOut
 
 
 class AdminCreateIn(BaseModel):
-    """Create a new admin account by phone number."""
+    """Create a new admin account (logs in with identifier + password)."""
 
     phone_number: str = Field(min_length=5, max_length=32)
+    username: str = Field(min_length=3, max_length=64)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=120)
     preferred_language: str = Field(default="ja", min_length=2, max_length=8)
 

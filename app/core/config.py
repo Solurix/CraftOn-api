@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     # Auth
     auth_mode: AuthMode = AuthMode.FAKE
     firebase_project_id: str = "crafton-dev-500709"
+    # App-issued session tokens (identifier+password login). The secret signs the
+    # HS256 JWT; the dev default keeps local/CI working with no setup, but a real
+    # secret MUST be supplied via env/Secret Manager in staging/prod.
+    session_secret: str = "dev-insecure-session-secret-change-me"
+    session_ttl_seconds: int = 7 * 24 * 3600  # 7 days
 
     # Cloud Storage (documents). `fake` returns deterministic local URLs for
     # dev/CI/tests; `gcs` issues real signed URLs (requires the `gcs` extra).

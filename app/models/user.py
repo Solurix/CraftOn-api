@@ -18,8 +18,14 @@ if TYPE_CHECKING:
 class User(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    # Firebase phone identity; the login id. Maps a verified token to this row.
+    # Phone identity, verified by SMS OTP at registration. One of the login
+    # identifiers (alongside username/email) and the canonical key a verified
+    # token maps to this row by.
     phone_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    # Login identifiers set at registration. Stored lower-cased so lookup and
+    # uniqueness are case-insensitive (see app.core.identifiers.normalize_*).
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     user_type: Mapped[UserType] = mapped_column(pg_enum(UserType, "user_type"), nullable=False)
     status: Mapped[UserStatus] = mapped_column(
         pg_enum(UserStatus, "user_status"),
@@ -30,8 +36,8 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     preferred_language: Mapped[str] = mapped_column(
         String(8), nullable=False, server_default=text("'ja'")
     )
-    # Optional password for returning logins (OTP still used for new devices).
-    # PBKDF2 hash; null until the user sets a password.
+    # Password for returning logins (identifier + password, no OTP). PBKDF2 hash;
+    # set at registration. Nullable at the column level for legacy/seeded rows.
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     worker_profile: Mapped[WorkerProfile | None] = relationship(

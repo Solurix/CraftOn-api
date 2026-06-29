@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core import errors
 from app.core.auth import FirebaseClaims, InvalidTokenError, get_verifier
 from app.core.config import ConfigService
+from app.core.session_token import InvalidSessionToken, verify_session_token
 from app.db.session import get_db
 from app.models.enums import UserType
 from app.models.user import User
@@ -37,11 +38,25 @@ def get_storage_service() -> StorageService:
 def get_claims(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> FirebaseClaims:
-    """Verify the bearer token and return its claims (401 if missing/invalid)."""
+    """Verify the bearer token and return its claims (401 if missing/invalid).
+
+    Accepts either an **app session token** (issued by login/registration — the
+    normal case) or, as a fallback, an **OTP token** (Firebase/fake) used once at
+    registration. Both expose ``phone_number``, which downstream resolves to the
+    user row.
+    """
     if credentials is None or not credentials.credentials:
         raise errors.unauthorized()
+    token = credentials.credentials
     try:
-        return get_verifier().verify(credentials.credentials)
+        session = verify_session_token(token)
+        return FirebaseClaims(
+            uid=session.sub, phone_number=session.phone_number, raw=session.raw
+        )
+    except InvalidSessionToken:
+        pass  # Not one of our tokens — try the OTP verifier (registration path).
+    try:
+        return get_verifier().verify(token)
     except InvalidTokenError as exc:
         raise errors.unauthorized("error.auth.invalid_token") from exc
 

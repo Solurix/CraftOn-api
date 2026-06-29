@@ -29,6 +29,12 @@ def _phone() -> str:
     return "+8190" + "".join(random.choice("0123456789") for _ in range(8))
 
 
+def _credentials(phone: str) -> tuple[str, str]:
+    """Derive a unique (username, email) pair from a seeded phone number."""
+    handle = "seed" + phone.lstrip("+")
+    return handle, f"{handle}@seed.local"
+
+
 def seed_random_data(
     db: Session, *, workers: int = 5, contractors: int = 3, jobs: int = 10
 ) -> dict[str, int]:
@@ -36,8 +42,12 @@ def seed_random_data(
     contractor_users: list[User] = []
     for _ in range(contractors):
         company = random.choice(_COMPANIES)
+        phone = _phone()
+        username, email = _credentials(phone)
         user = User(
-            phone_number=_phone(),
+            phone_number=phone,
+            username=username,
+            email=email,
             user_type=UserType.CONTRACTOR,
             status=UserStatus.APPROVED,
             display_name=company,
@@ -56,8 +66,12 @@ def seed_random_data(
 
     for _ in range(workers):
         name = f"{random.choice(_LAST)} {random.choice(_FIRST)}"
+        phone = _phone()
+        username, email = _credentials(phone)
         user = User(
-            phone_number=_phone(),
+            phone_number=phone,
+            username=username,
+            email=email,
             user_type=UserType.WORKER,
             status=UserStatus.APPROVED,
             display_name=name,

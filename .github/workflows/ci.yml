@@ -57,3 +57,50 @@ jobs:
 
       - name: Tests (pytest)
         run: pytest --cov=app --cov-report=term-missing
+
+  # ── Continuous deployment ───────────────────────────────────────────────────
+  # On push to main (after CI passes): build + push the image and roll the Cloud
+  # Run service. The container entrypoint runs `alembic upgrade head` before
+  # uvicorn, and Cloud Run only shifts traffic once the new revision is healthy —
+  # so this migrates first and keeps the old revision serving if a migration fails.
+  # Auth is via Workload Identity Federation (no stored keys). Terraform apply stays manual.
+  deploy:
+    needs: lint-type-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: crafton-dev-500709
+      REGION: asia-northeast1
+      SERVICE: crafton-api-dev
+      IMAGE: asia-northeast1-docker.pkg.dev/crafton-dev-500709/crafton/api
+      WIF_PROVIDER: projects/784671749504/locations/global/workloadIdentityPools/github-actions/providers/github
+      DEPLOYER_SA: crafton-deployer@crafton-dev-500709.iam.gserviceaccount.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        run: |
+          docker build --platform=linux/amd64 --provenance=false \
+            -t "$IMAGE:dev" -t "$IMAGE:${GITHUB_SHA}" .
+          docker push "$IMAGE:dev"
+          docker push "$IMAGE:${GITHUB_SHA}"
+
+      - name: Deploy to Cloud Run (migrates at startup, then serves)
+        run: |
+          gcloud run services update "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$IMAGE:dev"

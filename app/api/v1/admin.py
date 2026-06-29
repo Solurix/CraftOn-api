@@ -149,6 +149,9 @@ def create_admin(
     admin = admin_ops.create_admin(
         db,
         phone_number=payload.phone_number,
+        username=payload.username,
+        email=payload.email,
+        password=payload.password,
         display_name=payload.display_name,
         preferred_language=payload.preferred_language,
     )

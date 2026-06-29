@@ -125,9 +125,16 @@ def approved_member(
         role: str, phone: str, *, onboard: dict | None = None
     ) -> tuple[dict[str, str], str]:
         headers = auth_headers(phone)
+        handle = "u" + phone.lstrip("+")
         resp = client.post(
             "/api/v1/auth/session",
-            json={"user_type": role, "display_name": role.title()},
+            json={
+                "user_type": role,
+                "display_name": role.title(),
+                "username": handle,
+                "email": f"{handle}@test.local",
+                "password": "test-password-123",
+            },
             headers=headers,
         )
         assert resp.status_code in (200, 201), resp.text
@@ -148,15 +155,20 @@ def approved_member(
 @pytest.fixture
 def seed_admin(db: Session) -> Callable[..., dict[str, str]]:
     """Seed an approved admin (not self-assignable via API) and return its headers."""
+    from app.core import security
     from app.models.enums import UserStatus, UserType
     from app.models.user import User
 
     def _seed(phone_number: str = "+818000000001") -> dict[str, str]:
+        handle = "admin" + phone_number.lstrip("+")
         user = User(
             phone_number=phone_number,
+            username=handle,
+            email=f"{handle}@test.local",
             user_type=UserType.ADMIN,
             status=UserStatus.APPROVED,
             display_name="Admin",
+            password_hash=security.hash_password("admin-password"),
         )
         db.add(user)
         db.commit()
