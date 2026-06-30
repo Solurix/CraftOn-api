@@ -96,3 +96,38 @@ def test_documents_require_worker_or_contractor(client: TestClient, auth_headers
         "/api/v1/documents/upload-url", json={"doc_type": "photo_id"}
     )
     assert resp.status_code == 401
+
+
+def test_document_view_url_owner_and_isolation(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    owner = auth_headers("+819011110010")
+    _signup(client, owner, "worker", "Owner")
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "job_photo", "content_type": "image/jpeg"},
+        headers=owner,
+    ).json()
+    doc = client.post(
+        "/api/v1/documents",
+        json={"doc_type": "job_photo", "storage_path": ticket["storage_path"]},
+        headers=owner,
+    ).json()
+
+    # Owner gets a signed read URL.
+    view = client.get(f"/api/v1/documents/{doc['id']}/view-url", headers=owner)
+    assert view.status_code == 200, view.text
+    assert view.json()["read_url"]
+
+    # A different user cannot view someone else's document.
+    other = auth_headers("+819011110011")
+    _signup(client, other, "worker", "Other")
+    forbidden = client.get(f"/api/v1/documents/{doc['id']}/view-url", headers=other)
+    assert forbidden.status_code == 403
+
+    # Unknown id → 404.
+    missing = client.get(
+        "/api/v1/documents/00000000-0000-0000-0000-000000000000/view-url",
+        headers=owner,
+    )
+    assert missing.status_code == 404

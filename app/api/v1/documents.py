@@ -1,18 +1,23 @@
-"""Document upload & registration endpoints (docs/06)."""
+"""Document upload, registration, listing & signed-read-URL endpoints (docs/06)."""
 
 from __future__ import annotations
+
+import uuid
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_storage_service, require_roles
+from app.api.deps import get_current_user, get_storage_service, require_roles
+from app.core import errors
 from app.core.storage import StorageService
 from app.db.session import get_db
 from app.models.enums import UserType
 from app.models.user import User
+from app.schemas.common import ErrorResponse
 from app.schemas.document import (
     DocumentOut,
     DocumentRegisterIn,
+    DocumentWithUrlOut,
     UploadUrlIn,
     UploadUrlOut,
 )
@@ -56,3 +61,28 @@ def list_my_documents(
     db: Session = Depends(get_db),
 ) -> list[DocumentOut]:
     return [DocumentOut.model_validate(d) for d in documents.list_user_documents(db, user)]
+
+
+@router.get(
+    "/documents/{doc_id}/view-url",
+    response_model=DocumentWithUrlOut,
+    responses={403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+)
+def get_document_view_url(
+    doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+) -> DocumentWithUrlOut:
+    """Short-lived signed read URL for a document's bytes. The owner can view
+    their own documents; admins can view any (vetting). The bytes are served by
+    Cloud Storage via the signed URL — never proxied through the API."""
+    doc = documents.get_document(db, doc_id)
+    if doc is None:
+        raise errors.not_found("error.document.not_found")
+    if doc.user_id != user.id and user.user_type is not UserType.ADMIN:
+        raise errors.forbidden()
+    return DocumentWithUrlOut(
+        **DocumentOut.model_validate(doc).model_dump(),
+        read_url=documents.view_url(storage, doc),
+    )

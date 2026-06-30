@@ -38,11 +38,11 @@
   "error.config.unknown_key": "Unknown config key(s): {keys}",
   "error.review.not_completed": "Only completed matchings can be reviewed.",
   "error.review.already_reviewed": "You have already left this review.",
-  "terms.title.employment_daylabor": "Day-Labor Employment Agreement (placeholder)",
-  "terms.title.subcontract": "Subcontract Agreement (placeholder)",
-  "terms.body.employment_daylabor": "{company} employs {worker} as a day laborer on {date} and pays a daily wage of JPY {wage} in cash on site. Labor insurance follows the site's coverage.",
-  "terms.body.subcontract": "{company} subcontracts the work on {date} to {worker} (sole proprietor) for a fee of JPY {wage} paid in cash on site. Insurance is the worker's own labor coverage.",
-  "terms.disclaimer": "Note: this wording is provisional and pending review by qualified professionals (social-insurance/tax/legal).",
+  "terms.title.employment_daylabor": "Day-Labor Employment Agreement",
+  "terms.title.subcontract": "Subcontract Agreement",
+  "terms.body.employment_daylabor": "This Day-Labor Employment Agreement is entered into between {company} (the \"Employer\") and {worker} (the \"Worker\").\n1. Engagement: The Employer engages the Worker as a day laborer for work on {date} at the designated site.\n2. Wages: A daily wage of JPY {wage}, paid in cash on site upon completion, in accordance with the Labor Standards Act.\n3. Hours and breaks: As posted for the job; statutory breaks apply.\n4. Insurance and safety: Workers' accident compensation insurance follows the site's coverage; the Worker shall follow all site safety instructions.\n5. Cancellation: Either party may cancel under CRAFT-ON's cancellation policy; no-shows may affect the Worker's reliability rating.\n6. Conduct: The parties shall transact only through CRAFT-ON and shall not exchange private contact details to bypass the platform.\n7. Governing law: The laws of Japan; disputes are subject to the exclusive jurisdiction of the Tokyo District Court.",
+  "terms.body.subcontract": "This Subcontract Agreement is entered into between {company} (the \"Orderer\") and {worker}, a sole proprietor (the \"Contractor\").\n1. Work: The Orderer subcontracts the work scheduled for {date} at the designated site to the Contractor.\n2. Fee: JPY {wage}, paid in cash on site upon completion. The Contractor is responsible for completing the work.\n3. Independence: The Contractor is not an employee and no employment relationship arises; working method is at the Contractor's discretion within the site's requirements.\n4. Insurance: The Contractor maintains their own accident/labor coverage (e.g. sole-proprietor 労災).\n5. Cancellation: Per CRAFT-ON's cancellation policy; no-shows may affect the Contractor's reliability rating.\n6. Conduct: The parties shall transact only through CRAFT-ON and shall not exchange private contact details to bypass the platform.\n7. Governing law: The laws of Japan; disputes are subject to the exclusive jurisdiction of the Tokyo District Court.",
+  "terms.disclaimer": "Note: this is auto-generated provisional wording for Phase 1 and is pending review by qualified professionals (social-insurance/tax/legal).",
   "notification.application_received.title": "New applicant",
   "notification.application_received.body": "{name} applied to your job.",
   "notification.application_confirmed.title": "You're confirmed",
@@ -63,5 +63,7 @@
   "notification.account_rejected.body": "Your documents were not approved. Please review them.",
   "role.worker": "Worker",
   "role.contractor": "Contractor",
-  "role.admin": "Admin"
+  "role.admin": "Admin",
+  "error.auth.reset_no_account": "No account is registered for this phone number.",
+  "error.document.not_found": "Document not found."
 }

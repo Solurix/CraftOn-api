@@ -96,6 +96,44 @@ class LoginOut(BaseModel):
     user: UserOut
 
 
+class PasswordResetIn(BaseModel):
+    """Reset the password for the phone number proven by the OTP token in the
+    request (forgot-password flow). SMS OTP confirms phone ownership; no old
+    password is needed."""
+
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AccountUpdateIn(BaseModel):
+    """Change login identifiers (username and/or email) from account settings.
+
+    Both fields are optional; only the provided ones change. Normalized and
+    uniqueness-checked exactly like registration."""
+
+    username: str | None = Field(default=None, min_length=3, max_length=64)
+    email: str | None = Field(default=None, max_length=255)
+
+    @field_validator("username")
+    @classmethod
+    def _norm_username(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = normalize_username(v)
+        if not _USERNAME_RE.match(v):
+            raise ValueError("username may contain only letters, digits, . _ -")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def _norm_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = normalize_email(v)
+        if not looks_like_email(v):
+            raise ValueError("invalid email address")
+        return v
+
+
 class MeOut(BaseModel):
     user: UserOut
     has_worker_profile: bool = False

@@ -1,6 +1,8 @@
-"""Document services: issue signed upload URLs, register, and list."""
+"""Document services: issue signed upload URLs, register, list, and view."""
 
 from __future__ import annotations
+
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,3 +37,12 @@ def list_user_documents(db: Session, user: User) -> list[Document]:
             .order_by(Document.created_at.desc())
         ).all()
     )
+
+
+def get_document(db: Session, doc_id: uuid.UUID) -> Document | None:
+    return db.get(Document, doc_id)
+
+
+def view_url(storage: StorageService, doc: Document) -> str:
+    """A short-lived signed read URL for a document's bytes (never via the API)."""
+    return storage.read_url(doc.storage_path)

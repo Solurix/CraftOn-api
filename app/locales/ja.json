@@ -38,11 +38,11 @@
   "error.config.unknown_key": "不明な設定キーです: {keys}",
   "error.review.not_completed": "完了した取引のみレビューできます。",
   "error.review.already_reviewed": "すでにレビュー済みです。",
-  "terms.title.employment_daylabor": "日雇労働契約（プレースホルダー）",
-  "terms.title.subcontract": "業務委託契約（プレースホルダー）",
-  "terms.body.employment_daylabor": "{company} は {worker} を {date} の日雇労働者として雇用し、日当 {wage} 円を現場にて現金で支払います。労働保険は現場の適用に従います。",
-  "terms.body.subcontract": "{company} は {worker}（一人親方）に {date} の作業を業務委託し、報酬 {wage} 円を現場にて現金で支払います。労災は本人加入分によります。",
-  "terms.disclaimer": "※本文面は暫定であり、専門家（社労士・税理士・弁護士）の確認待ちです。",
+  "terms.title.employment_daylabor": "日雇労働契約書",
+  "terms.title.subcontract": "業務委託契約書",
+  "terms.body.employment_daylabor": "本日雇労働契約は、{company}（以下「使用者」）と {worker}（以下「労働者」）との間で締結されます。\n第1条（雇用）使用者は、{date} に指定現場で行う作業について、労働者を日雇労働者として雇用します。\n第2条（賃金）日当 {wage} 円とし、作業完了後に現場にて現金で支払います（労働基準法に準拠）。\n第3条（労働時間・休憩）求人に記載のとおりとし、法定の休憩を付与します。\n第4条（保険・安全）労働者災害補償保険は現場の適用に従います。労働者は現場の安全指示に従うものとします。\n第5条（キャンセル）両当事者は CRAFT-ON のキャンセルポリシーに従い解約できます。無断不参加は信頼スコアに影響する場合があります。\n第6条（遵守事項）両当事者は CRAFT-ON を通じてのみ取引し、プラットフォームを介さない私的な連絡先の交換を行いません。\n第7条（準拠法・管轄）本契約は日本法に準拠し、紛争は東京地方裁判所を専属的合意管轄とします。",
+  "terms.body.subcontract": "本業務委託契約は、{company}（以下「発注者」）と一人親方である {worker}（以下「受託者」）との間で締結されます。\n第1条（業務）発注者は、{date} に指定現場で予定された作業を受託者に業務委託します。\n第2条（報酬）報酬は {wage} 円とし、作業完了後に現場にて現金で支払います。受託者は業務の完成について責任を負います。\n第3条（独立性）受託者は従業員ではなく、雇用関係は生じません。作業方法は現場の要件の範囲内で受託者の裁量によります。\n第4条（保険）受託者は自己の労災・傷害保険（一人親方労災等）に加入するものとします。\n第5条（キャンセル）CRAFT-ON のキャンセルポリシーに従います。無断不参加は信頼スコアに影響する場合があります。\n第6条（遵守事項）両当事者は CRAFT-ON を通じてのみ取引し、プラットフォームを介さない私的な連絡先の交換を行いません。\n第7条（準拠法・管轄）本契約は日本法に準拠し、紛争は東京地方裁判所を専属的合意管轄とします。",
+  "terms.disclaimer": "※本文面はフェーズ1向けに自動生成された暫定的なものであり、専門家（社労士・税理士・弁護士）の確認待ちです。",
   "notification.application_received.title": "新しい応募",
   "notification.application_received.body": "{name} さんがあなたの求人に応募しました。",
   "notification.application_confirmed.title": "確定しました",
@@ -63,5 +63,7 @@
   "notification.account_rejected.body": "提出書類が承認されませんでした。内容をご確認ください。",
   "role.worker": "職人",
   "role.contractor": "工務店",
-  "role.admin": "管理者"
+  "role.admin": "管理者",
+  "error.auth.reset_no_account": "この電話番号で登録されたアカウントはありません。",
+  "error.document.not_found": "ドキュメントが見つかりません。"
 }

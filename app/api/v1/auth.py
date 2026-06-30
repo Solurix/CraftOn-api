@@ -25,9 +25,11 @@ from app.models.enums import UserType
 from app.models.user import User
 from app.schemas.common import ErrorResponse
 from app.schemas.user import (
+    AccountUpdateIn,
     LoginIn,
     LoginOut,
     MeOut,
+    PasswordResetIn,
     SessionCreateIn,
     SessionOut,
     SetPasswordIn,
@@ -175,6 +177,61 @@ def login(
         raise errors.unauthorized("error.auth.invalid_credentials")
     request.state.locale = user.preferred_language
     return LoginOut(token=issue_session_token(user), user=UserOut.model_validate(user))
+
+
+@router.post(
+    "/auth/reset-password",
+    response_model=LoginOut,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}},
+)
+def reset_password(
+    payload: PasswordResetIn,
+    request: Request,
+    claims: FirebaseClaims = Depends(get_claims),
+    db: Session = Depends(get_db),
+) -> LoginOut:
+    """Forgot-password recovery. The client re-verifies the phone by SMS OTP; the
+    OTP token here proves phone ownership, so we set a new password on the
+    matching account and return a fresh session token (logged in). No old
+    password required — SMS is the proof of identity, consistent with the
+    OTP-at-confirmation-only model (ADR 0009)."""
+    if not claims.phone_number:
+        raise errors.unauthorized("error.auth.no_phone")
+    user = db.scalar(select(User).where(User.phone_number == claims.phone_number))
+    if user is None:
+        raise errors.bad_request("reset_no_account", "error.auth.reset_no_account")
+    user.password_hash = security.hash_password(payload.password)
+    db.commit()
+    db.refresh(user)
+    request.state.locale = user.preferred_language
+    return LoginOut(token=issue_session_token(user), user=UserOut.model_validate(user))
+
+
+@router.patch(
+    "/me/account",
+    response_model=UserOut,
+    responses={401: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def update_account(
+    payload: AccountUpdateIn,
+    user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    """Change the caller's login identifiers (username and/or email) from account
+    settings. Each is uniqueness-checked (excluding the caller) → clean 409."""
+    if payload.username is not None and payload.username != user.username:
+        clash = db.scalar(select(User).where(User.username == payload.username))
+        if clash is not None and clash.id != user.id:
+            raise errors.conflict("username_taken", "error.user.username_taken")
+        user.username = payload.username
+    if payload.email is not None and payload.email != user.email:
+        clash = db.scalar(select(User).where(User.email == payload.email))
+        if clash is not None and clash.id != user.id:
+            raise errors.conflict("email_taken", "error.user.email_taken")
+        user.email = payload.email
+    db.commit()
+    db.refresh(user)
+    return UserOut.model_validate(user)
 
 
 @router.get("/me", response_model=MeOut, responses={401: {"model": ErrorResponse}})
