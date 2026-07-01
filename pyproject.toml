@@ -13,6 +13,9 @@ dependencies = [
     "sqlalchemy>=2.0.30",
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
+    # Real Cloud Storage signed URLs (GcsStorage); lazy-imported, but must ship in
+    # the runtime image when CRAFTON_STORAGE_MODE=gcs.
+    "google-cloud-storage>=2.18",
 ]
 
 [project.optional-dependencies]

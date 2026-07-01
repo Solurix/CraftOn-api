@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.storage import StorageService, UploadTicket
 from app.models.document import Document
-from app.models.enums import DocType
+from app.models.enums import DocReviewStatus, DocType
 from app.models.user import User
 
 
@@ -41,6 +41,23 @@ def list_user_documents(db: Session, user: User) -> list[Document]:
 
 def get_document(db: Session, doc_id: uuid.UUID) -> Document | None:
     return db.get(Document, doc_id)
+
+
+def list_public_worker_photos(db: Session, user_id: uuid.UUID) -> list[Document]:
+    """A worker's portfolio photos for their public profile: `job_photo` documents
+    that haven't been rejected. Portfolio images are post-moderated (shown, then
+    removable), unlike identity documents which are strictly gated (docs/08)."""
+    return list(
+        db.scalars(
+            select(Document)
+            .where(
+                Document.user_id == user_id,
+                Document.doc_type == DocType.JOB_PHOTO,
+                Document.review_status != DocReviewStatus.REJECTED,
+            )
+            .order_by(Document.created_at.desc())
+        ).all()
+    )
 
 
 def view_url(storage: StorageService, doc: Document) -> str:

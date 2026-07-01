@@ -7,7 +7,12 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_storage_service, require_roles
+from app.api.deps import (
+    get_current_user,
+    get_storage_service,
+    require_approved,
+    require_roles,
+)
 from app.core import errors
 from app.core.storage import StorageService
 from app.db.session import get_db
@@ -86,3 +91,23 @@ def get_document_view_url(
         **DocumentOut.model_validate(doc).model_dump(),
         read_url=documents.view_url(storage, doc),
     )
+
+
+@router.get("/workers/{user_id}/photos", response_model=list[DocumentWithUrlOut])
+def worker_public_photos(
+    user_id: uuid.UUID,
+    _viewer: User = Depends(require_approved),
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+) -> list[DocumentWithUrlOut]:
+    """A worker's public portfolio photos (signed read URLs). Visible to any
+    approved user — the same audience as the public worker profile. Only
+    `job_photo` documents; identity documents are never exposed here."""
+    docs = documents.list_public_worker_photos(db, user_id)
+    return [
+        DocumentWithUrlOut(
+            **DocumentOut.model_validate(d).model_dump(),
+            read_url=documents.view_url(storage, d),
+        )
+        for d in docs
+    ]
