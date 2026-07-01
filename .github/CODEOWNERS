@@ -1,0 +1,25 @@
+# Code owners for the money/security/infra blast radius.
+#
+# With branch protection "Require review from Code Owners" enabled on `main`,
+# these paths cannot be merged without the owner's review. `@Solurix` is the repo
+# owner — change it to the actual reviewer handle or a team (e.g. @Solurix/maintainers)
+# if that org uses teams.
+
+# CI/CD & the preview pipeline (holds the WIF trust + deploy steps).
+/.github/workflows/**    @Solurix
+/.github/CODEOWNERS       @Solurix
+
+# The image the build SA executes — a malicious RUN could exfiltrate build creds.
+**/Dockerfile            @Solurix
+/docker-compose.yml      @Solurix
+
+# Data safety: every schema change and the migration runner.
+/migrations/**           @Solurix
+
+# Secrets / env / DB wiring and auth.
+/app/core/config.py      @Solurix
+/app/db/**               @Solurix
+/app/core/auth.py        @Solurix
+
+# Dependencies = supply chain.
+/pyproject.toml          @Solurix

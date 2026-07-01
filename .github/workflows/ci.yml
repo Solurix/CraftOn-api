@@ -4,6 +4,12 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  merge_group:
+
+# Cancel superseded runs on the same ref (a new push / merge-queue update wins).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   # Tests use the fake auth verifier — no GCP credentials required.
@@ -48,6 +54,12 @@ jobs:
 
       - name: i18n ja/en parity check
         run: python -m app.core.i18n --check
+
+      # Migration hygiene: a single linear head. Two heads mean a branch that must
+      # be rebased/merged before it can deploy (previews and prod both migrate at
+      # container boot, so an ambiguous head would fail there).
+      - name: Exactly one migration head
+        run: test "$(alembic heads 2>/dev/null | grep -c '(head)')" -eq 1
 
       - name: Migrations apply (upgrade head)
         run: alembic upgrade head

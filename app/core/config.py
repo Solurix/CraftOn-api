@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://crafton:crafton@localhost:5432/crafton"
     )
+    # Preview environments: when ``CRAFTON_DB_NAME`` is set we swap ONLY the
+    # db-name path segment of ``database_url`` (see ``effective_database_url``).
+    # This lets a per-PR preview point at its own isolated database while still
+    # mounting the shared ``crafton-db-url`` secret — the password/socket never
+    # leave Secret Manager and no second secret is needed. Unset in dev/CI/tests.
+    db_name: str | None = None
 
     # Auth
     auth_mode: AuthMode = AuthMode.FAKE
@@ -103,6 +109,29 @@ class Settings(BaseSettings):
     @property
     def is_testing(self) -> bool:
         return self.env in (AppEnv.CI, AppEnv.LOCAL)
+
+    @property
+    def effective_database_url(self) -> str:
+        """``database_url`` with the db-name segment swapped for ``db_name``.
+
+        Returns ``database_url`` unchanged when ``db_name`` is unset (dev/CI/prod).
+        Handles both URL shapes we deploy with:
+
+        * Cloud SQL unix socket — ``postgresql+psycopg://user:pw@/crafton?host=/cloudsql/PROJ:REGION:INST``
+        * host:port — ``postgresql+psycopg://user:pw@host:5432/crafton``
+
+        Only the ``<db>`` name changes; credentials, socket/host and query string
+        are preserved.
+        """
+        if not self.db_name:
+            return self.database_url
+        head, sep_at, rest = self.database_url.partition("@/")  # Cloud SQL socket form
+        if not sep_at:  # host:port/db fallback
+            base, _, tail = self.database_url.rpartition("/")
+            _old, q_sep, query = tail.partition("?")
+            return f"{base}/{self.db_name}{q_sep}{query}"
+        _old, q_sep, query = rest.partition("?")
+        return f"{head}@/{self.db_name}{q_sep}{query}"
 
 
 @lru_cache

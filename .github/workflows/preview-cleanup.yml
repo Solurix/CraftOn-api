@@ -1,0 +1,65 @@
+name: preview-cleanup
+
+# Tear down a PR's API preview: remove the tag, delete its revisions, drop the
+# isolated database. Runs on PR close; also exposes workflow_dispatch so the owner
+# can reclaim a leaked preview by number (the GitHub bot may lack actions:write to
+# self-trigger, so this is run from the Actions tab when needed).
+
+on:
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number whose preview should be torn down
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: crafton-dev-500709
+      REGION: asia-northeast1
+      SERVICE: crafton-api-dev
+      WIF_PROVIDER: projects/784671749504/locations/global/workloadIdentityPools/github-actions/providers/github
+      DEPLOYER_SA: crafton-deployer@crafton-dev-500709.iam.gserviceaccount.com
+      SQL_INSTANCE: crafton-dev
+      PR: ${{ github.event.inputs.pr_number || github.event.number }}
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Order matters: the tag must be removed before its revision can be deleted.
+      - name: Remove preview tag
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --remove-tags "pr${PR}" --quiet || echo "no tag pr${PR}"
+
+      - name: Delete preview revisions
+        run: |
+          revs=$(gcloud run revisions list --service "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --filter="metadata.name ~ ^${SERVICE}-pr${PR}-" \
+            --format='value(metadata.name)')
+          if [ -z "$revs" ]; then echo "no revisions for pr${PR}"; fi
+          for r in $revs; do
+            echo "deleting revision $r"
+            gcloud run revisions delete "$r" \
+              --project "$PROJECT_ID" --region "$REGION" --quiet || true
+          done
+
+      - name: Drop per-PR database
+        run: |
+          gcloud sql databases delete "crafton_pr${PR}" \
+            --instance="$SQL_INSTANCE" --project "$PROJECT_ID" --quiet \
+            || echo "database crafton_pr${PR} already gone"

@@ -1,0 +1,197 @@
+name: preview-deploy
+
+# Per-PR preview environment for the API.
+#
+# Each PR gets an isolated `crafton_pr<N>` database on the shared `crafton-dev`
+# Cloud SQL instance plus a --no-traffic --tag pr<N> revision of crafton-api-dev
+# that migrates at boot against that DB and is smoke-tested in isolation. Prod
+# (the `crafton` DB / the live revision) is never touched.
+#
+# Trust model: pull_request_target runs this workflow (and its credentialed steps)
+# from `main`, so a PR can't rewrite them; CODEOWNERS gates the workflow + Dockerfile.
+# The PR's code is checked out only as build input and executes inside `docker build`
+# and at preview runtime (as the thin crafton-api-dev runtime SA). Fork PRs are
+# skipped — they can't mint a WIF token.
+#
+# NOTE: because this runs from `main`, changes to the pipeline only take effect
+# after they're merged; the PR that introduces them can't validate itself.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: preview-api-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    # Same-repo, non-draft PRs only (forks can't authenticate to GCP).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: crafton-dev-500709
+      REGION: asia-northeast1
+      SERVICE: crafton-api-dev
+      IMAGE: asia-northeast1-docker.pkg.dev/crafton-dev-500709/crafton/api
+      WIF_PROVIDER: projects/784671749504/locations/global/workloadIdentityPools/github-actions/providers/github
+      DEPLOYER_SA: crafton-deployer@crafton-dev-500709.iam.gserviceaccount.com
+      RUNTIME_SA: crafton-api-dev@crafton-dev-500709.iam.gserviceaccount.com
+      SQL_INSTANCE: crafton-dev
+      SQL_CONNECTION: crafton-dev-500709:asia-northeast1:crafton-dev
+      DB_SECRET: crafton-db-url
+      PR: ${{ github.event.number }}
+    steps:
+      # PR head is checked out only as build input — no PR script runs on the runner.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Compute identifiers
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          {
+            echo "TAG=pr${PR}"
+            echo "DB=crafton_pr${PR}"
+            echo "SHORT_SHA=${SHORT_SHA}"
+            echo "REV_SUFFIX=pr${PR}-${SHORT_SHA}"
+            echo "IMAGE_TAG=${IMAGE}:pr${PR}-${SHORT_SHA}"
+          } >> "$GITHUB_ENV"
+
+      # Isolated per-PR database (idempotent across synchronize pushes). Cloned from
+      # template1; a one-time `GRANT ALL ON SCHEMA public TO crafton_app` on template1
+      # lets the runtime SA's role create tables at boot (PG15+ removed public CREATE).
+      - name: Create per-PR database
+        run: |
+          gcloud sql databases create "$DB" --instance="$SQL_INSTANCE" \
+            --project "$PROJECT_ID" 2>/dev/null && echo "created $DB" \
+            || echo "$DB already exists — reusing"
+
+      - name: Build & push preview image
+        run: |
+          docker build --platform=linux/amd64 --provenance=false \
+            -t "$IMAGE_TAG" .
+          docker push "$IMAGE_TAG"
+
+      # Deploy a no-traffic tagged revision. DB access is attached EXPLICITLY
+      # (service account + Cloud SQL instance + secret) — template inheritance is
+      # unreliable and the preview then 500s on every DB op. --update-env-vars
+      # MERGES (adds CRAFTON_DB_NAME, flips storage to fake); --set-env-vars would
+      # wipe the rest of the service's env. Migrations run at container boot against
+      # $DB (Dockerfile entrypoint), serialized by the advisory lock in env.py.
+      - name: Deploy preview revision (no traffic)
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --image "$IMAGE_TAG" \
+            --no-traffic --tag "$TAG" \
+            --revision-suffix "$REV_SUFFIX" \
+            --labels "preview-pr=${PR}" \
+            --service-account "$RUNTIME_SA" \
+            --add-cloudsql-instances "$SQL_CONNECTION" \
+            --update-secrets "CRAFTON_DATABASE_URL=${DB_SECRET}:latest" \
+            --update-env-vars "CRAFTON_DB_NAME=${DB},CRAFTON_ENV=dev,CRAFTON_STORAGE_MODE=fake" \
+            --quiet
+
+      - name: Resolve preview URL
+        run: |
+          BASE=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          if [ -z "$BASE" ]; then echo "could not read service URL"; exit 1; fi
+          echo "API_URL=https://${TAG}---${BASE#https://}" >> "$GITHUB_ENV"
+
+      # Liveness via /openapi.json (NOT /healthz — Google's edge returns 404 for it
+      # on *.run.app). Then signup→login→/me exercises a real write+read against the
+      # isolated DB, proving migrations ran. The first request cold-starts the
+      # revision, so allow generous time for boot + migrate.
+      - name: Smoke test the preview
+        run: |
+          echo "Preview API: $API_URL"
+          code=""
+          for i in $(seq 1 48); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/openapi.json" || true)
+            [ "$code" = "200" ] && { echo "live after ~$((i*5))s"; break; }
+            sleep 5
+          done
+          [ "$code" = "200" ] || { echo "::error::API never became live"; exit 1; }
+
+          SUFFIX=$(printf '%08d' $(( (GITHUB_RUN_ID + RANDOM) % 100000000 )))
+          PHONE="+8190${SUFFIX}"
+          USER="smoke${GITHUB_RUN_ID}"
+          PW="smoke-password-123"
+          FAKE=$(printf '{"uid":"fake-%s","phone_number":"%s"}' "$PHONE" "$PHONE" \
+            | base64 -w0 | tr '+/' '-_' | tr -d '=')
+
+          echo "signup…"
+          out=$(curl -s -w '\n%{http_code}' -X POST "$API_URL/api/v1/auth/session" \
+            -H "Authorization: Bearer $FAKE" -H 'Content-Type: application/json' \
+            -d "{\"user_type\":\"worker\",\"display_name\":\"Smoke\",\"username\":\"$USER\",\"email\":\"$USER@smoke.local\",\"password\":\"$PW\"}")
+          body=$(printf '%s' "$out" | sed '$d'); scode=$(printf '%s' "$out" | tail -n1)
+          echo "  -> $scode"
+          case "$scode" in 200|201) ;; *) echo "$body"; exit 1;; esac
+
+          echo "login…"
+          out=$(curl -s -w '\n%{http_code}' -X POST "$API_URL/api/v1/auth/login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"identifier\":\"$USER\",\"password\":\"$PW\"}")
+          body=$(printf '%s' "$out" | sed '$d'); lcode=$(printf '%s' "$out" | tail -n1)
+          echo "  -> $lcode"
+          [ "$lcode" = "200" ] || { echo "$body"; exit 1; }
+          TOKEN=$(printf '%s' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+          echo "GET /me…"
+          mecode=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/api/v1/me" \
+            -H "Authorization: Bearer $TOKEN")
+          echo "  -> $mecode"
+          [ "$mecode" = "200" ] || { echo "::error::/me failed"; exit 1; }
+          echo "SMOKE OK"
+
+      - name: Comment preview URL on the PR
+        uses: actions/github-script@v7
+        env:
+          API_URL: ${{ env.API_URL }}
+          DB: ${{ env.DB }}
+          TAG: ${{ env.TAG }}
+          REV_SUFFIX: ${{ env.REV_SUFFIX }}
+        with:
+          script: |
+            const marker = '<!-- crafton-preview-api -->';
+            const { API_URL, DB, TAG, REV_SUFFIX } = process.env;
+            const pr = context.issue.number;
+            const body = [
+              marker,
+              '### 🔎 API preview',
+              `- **URL:** ${API_URL}`,
+              `- **Database:** \`${DB}\` (isolated, migrated)`,
+              `- **Revision:** \`${REV_SUFFIX}\` — no-traffic, tag \`${TAG}\``,
+              '',
+              'Smoke test (signup → login → `/me`) passed against the isolated DB.',
+              'Torn down automatically when this PR closes.',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: pr,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: pr, body });
+            }
