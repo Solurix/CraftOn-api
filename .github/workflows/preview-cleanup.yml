@@ -45,6 +45,10 @@ jobs:
             --project "$PROJECT_ID" --region "$REGION" \
             --remove-tags "pr${PR}" --quiet || echo "no tag pr${PR}"
 
+      # Cloud Run refuses to delete a service's *latest-created* revision
+      # (FAILED_PRECONDITION); if this preview was the last deploy, its revision
+      # lingers until a newer deploy supersedes it. Harmless — untagged, no traffic,
+      # scales to zero — so this step is best-effort and never fails the job.
       - name: Delete preview revisions
         run: |
           revs=$(gcloud run revisions list --service "$SERVICE" \
