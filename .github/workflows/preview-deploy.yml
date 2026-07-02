@@ -48,6 +48,9 @@ jobs:
       SQL_CONNECTION: crafton-dev-500709:asia-northeast1:crafton-dev
       DB_SECRET: crafton-db-url
       PR: ${{ github.event.number }}
+      # PR head sha — changes on every push, so the revision suffix stays unique.
+      # (GITHUB_SHA is the base-branch sha under pull_request_target and would collide.)
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       # PR head is checked out only as build input — no PR script runs on the runner.
       - uses: actions/checkout@v4
@@ -67,7 +70,7 @@ jobs:
 
       - name: Compute identifiers
         run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
+          SHORT_SHA="${HEAD_SHA::7}"
           {
             echo "TAG=pr${PR}"
             echo "DB=crafton_pr${PR}"
@@ -77,8 +80,9 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # Isolated per-PR database (idempotent across synchronize pushes). Cloned from
-      # template1; a one-time `GRANT ALL ON SCHEMA public TO crafton_app` on template1
-      # lets the runtime SA's role create tables at boot (PG15+ removed public CREATE).
+      # template1; crafton_app is a Cloud SQL cloudsqlsuperuser member, so it can
+      # create tables in the fresh DB's public schema at boot — no grant needed
+      # (see docs/12-preview-environments.md).
       - name: Create per-PR database
         run: |
           gcloud sql databases create "$DB" --instance="$SQL_INSTANCE" \
