@@ -22,6 +22,9 @@ class WorkHistoryEntry(BaseModel):
     company: str = Field(default="", max_length=255)
     trade: str = Field(default="", max_length=120)
     years: int = Field(default=0, ge=0, le=80)
+    # Free-text summary of what the worker did there (概要). Candidate for
+    # AI-assisted drafting later (docs/03 roadmap).
+    description: str = Field(default="", max_length=2000)
 
 
 class WorkerOnboardingIn(BaseModel):

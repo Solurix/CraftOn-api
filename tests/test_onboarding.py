@@ -131,3 +131,71 @@ def test_document_view_url_owner_and_isolation(
         headers=owner,
     )
     assert missing.status_code == 404
+
+
+def test_worker_display_name_defaults_to_full_name(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    # Signup no longer collects a display name → the API assigns a provisional
+    # one, and first onboarding upgrades it to the worker's real name.
+    h = auth_headers("+819011110020")
+    _signup(client, h, "worker", "")
+
+    resp = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "JP",
+            "worker_class": "employee",
+            "full_name": "山田 太郎",
+        },
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["display_name"] == "山田 太郎"
+
+    # Re-onboarding without a display name must not clobber a custom one.
+    client.patch("/api/v1/workers/me", json={"display_name": "たろちゃん"}, headers=h)
+    again = client.post(
+        "/api/v1/onboarding/worker",
+        json={"nationality": "JP", "worker_class": "employee", "full_name": "山田 太郎"},
+        headers=h,
+    )
+    assert again.json()["display_name"] == "たろちゃん"
+
+
+def test_contractor_display_name_defaults_to_company_name(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    h = auth_headers("+819011110021")
+    _signup(client, h, "contractor", "")
+    resp = client.post(
+        "/api/v1/onboarding/contractor",
+        json={"company_name": "みらい建築", "contact_person": "Sato", "prefecture": "Tokyo"},
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["display_name"] == "みらい建築"
+
+
+def test_work_history_description_roundtrip(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    h = auth_headers("+819011110022")
+    _signup(client, h, "worker", "Taro")
+    entry = {
+        "company": "山田建設",
+        "trade": "大工",
+        "years": 3,
+        "description": "都内マンションの内装仕上げを担当。",
+    }
+    resp = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "JP",
+            "worker_class": "employee",
+            "work_history": [entry],
+        },
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["work_history"] == [entry]

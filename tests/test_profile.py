@@ -83,7 +83,9 @@ def test_worker_extended_profile_and_employer_visibility(
     assert me["full_name"] == "山田 太郎"
     assert me["email"] == "taro@example.com"
     assert me["current_employer"] == "山田建設"
-    assert me["work_history"][0] == {"company": "ABC工務店", "trade": "大工", "years": 5}
+    assert me["work_history"][0] == {
+        "company": "ABC工務店", "trade": "大工", "years": 5, "description": ""
+    }
     assert me["qualifications"] == ["技能士2級"]
     assert me["skills"] == ["型枠", "墨出し"]
 

@@ -39,10 +39,14 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     _validate_owned_doc(db, user, payload.residence_card_front_doc_id)
     _validate_owned_doc(db, user, payload.residence_card_back_doc_id)
 
+    profile = db.get(WorkerProfile, user.id)
     if payload.display_name:
         user.display_name = payload.display_name
+    elif profile is None and payload.full_name:
+        # Signup no longer asks for a display name; default it to the worker's
+        # name on first onboarding. It stays editable in profile settings.
+        user.display_name = payload.full_name
 
-    profile = db.get(WorkerProfile, user.id)
     if profile is None:
         profile = WorkerProfile(user_id=user.id, nationality=payload.nationality,
                                 worker_class=payload.worker_class)
@@ -105,10 +109,14 @@ def onboard_contractor(
     db: Session, user: User, payload: ContractorOnboardingIn
 ) -> ContractorProfile:
     _require_role(user, UserType.CONTRACTOR)
+    profile = db.get(ContractorProfile, user.id)
     if payload.display_name:
         user.display_name = payload.display_name
+    elif profile is None:
+        # Signup no longer asks for a display name; a contractor's public name
+        # defaults to the company name. Editable later in profile settings.
+        user.display_name = payload.company_name
 
-    profile = db.get(ContractorProfile, user.id)
     if profile is None:
         profile = ContractorProfile(
             user_id=user.id,
