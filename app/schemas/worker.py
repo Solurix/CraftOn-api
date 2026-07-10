@@ -22,6 +22,9 @@ class WorkHistoryEntry(BaseModel):
     company: str = Field(default="", max_length=255)
     trade: str = Field(default="", max_length=120)
     years: int = Field(default=0, ge=0, le=80)
+    # Free-text summary of what the worker did there (概要). Candidate for
+    # AI-assisted drafting later (docs/03 roadmap).
+    description: str = Field(default="", max_length=2000)
 
 
 class WorkerOnboardingIn(BaseModel):
@@ -35,8 +38,12 @@ class WorkerOnboardingIn(BaseModel):
     has_insurance: bool = False
     bio: str | None = None
     years_experience: int = Field(default=0, ge=0)
-    # Extended profile fields.
+    # Extended profile fields. Structured name parts are preferred; full_name
+    # is composed from them server-side (kept for back-compat input/display).
     full_name: str | None = None
+    family_name: str | None = Field(default=None, max_length=120)
+    given_name: str | None = Field(default=None, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
     name_kana: str | None = None
     email: str | None = None
     current_employer: str | None = None
@@ -65,6 +72,9 @@ class WorkerProfileUpdate(BaseModel):
     bio: str | None = None
     years_experience: int | None = Field(default=None, ge=0)
     full_name: str | None = None
+    family_name: str | None = Field(default=None, max_length=120)
+    given_name: str | None = Field(default=None, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
     name_kana: str | None = None
     email: str | None = None
     current_employer: str | None = None
@@ -96,6 +106,9 @@ class WorkerProfileOut(BaseModel):
     bio: str | None
     years_experience: int
     full_name: str | None
+    family_name: str | None
+    given_name: str | None
+    middle_name: str | None
     name_kana: str | None
     email: str | None
     current_employer: str | None

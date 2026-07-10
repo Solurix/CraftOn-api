@@ -45,9 +45,22 @@ def _check_trades(trades: list[str], config: ConfigService) -> None:
         )
 
 
+def _check_photo_docs(db: Session, contractor: User, doc_ids: list[uuid.UUID]) -> None:
+    """Attached photos must be the contractor's own `job_photo` documents —
+    that's what makes them safely reusable across postings."""
+    from app.models.document import Document
+    from app.models.enums import DocType
+
+    for doc_id in doc_ids:
+        doc = db.get(Document, doc_id)
+        if doc is None or doc.user_id != contractor.id or doc.doc_type is not DocType.JOB_PHOTO:
+            raise errors.bad_request("invalid_photo", "error.job.invalid_photo")
+
+
 def create_job(db: Session, contractor: User, payload: JobCreate, config: ConfigService) -> Job:
     _check_service_area(payload.prefecture, config)
     _check_trades(payload.trades, config)
+    _check_photo_docs(db, contractor, payload.photo_doc_ids)
     job = Job(
         contractor_id=contractor.id,
         trades=payload.trades,
@@ -60,6 +73,7 @@ def create_job(db: Session, contractor: User, payload: JobCreate, config: Config
         daily_wage=payload.daily_wage,
         headcount=payload.headcount,
         notes=payload.notes,
+        photo_doc_ids=payload.photo_doc_ids,
     )
     db.add(job)
     db.commit()
@@ -92,6 +106,10 @@ def update_job(
         _check_service_area(data["prefecture"], config)
     if "trades" in data and data["trades"] is not None:
         _check_trades(data["trades"], config)
+    if data.get("photo_doc_ids") is None:
+        data.pop("photo_doc_ids", None)
+    else:
+        _check_photo_docs(db, contractor, data["photo_doc_ids"])
     for field, value in data.items():
         setattr(job, field, value)
 

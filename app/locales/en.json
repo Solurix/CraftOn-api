@@ -65,5 +65,8 @@
   "role.contractor": "Contractor",
   "role.admin": "Admin",
   "error.auth.reset_no_account": "No account is registered for this phone number.",
-  "error.document.not_found": "Document not found."
+  "error.document.not_found": "Document not found.",
+  "error.trade.exists": "A trade with this name already exists.",
+  "error.trade.merge_self": "Cannot merge a trade into itself.",
+  "error.job.invalid_photo": "Invalid photo. Only your own uploaded work photos can be attached."
 }

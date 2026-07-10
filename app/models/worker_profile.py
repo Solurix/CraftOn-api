@@ -60,6 +60,11 @@ class WorkerProfile(TimestampMixin, Base):
     # email) is self/admin-only; current employer is shown publicly only when
     # ``current_employer_public`` is set.
     full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Structured name parts (family/last, given/first, optional middle). The
+    # display-oriented ``full_name`` is composed from these on write.
+    family_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    given_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    middle_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     name_kana: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_employer: Mapped[str | None] = mapped_column(String(255), nullable=True)

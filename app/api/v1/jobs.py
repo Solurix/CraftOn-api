@@ -13,15 +13,17 @@ from app.api.deps import (
     approved_contractor,
     approved_worker,
     get_config,
+    get_storage_service,
     require_approved,
 )
 from app.core.config import ConfigService
+from app.core.storage import StorageService
 from app.db.session import get_db
 from app.models.job import Job
 from app.models.user import User
 from app.schemas.common import ErrorResponse
-from app.schemas.job import JobCreate, JobOut, JobUpdate
-from app.services import jobs, saved_jobs
+from app.schemas.job import JobCreate, JobOut, JobPhotoOut, JobUpdate
+from app.services import documents, jobs, saved_jobs
 
 router = APIRouter(tags=["jobs"])
 
@@ -150,3 +152,23 @@ def cancel_job(
     db: Session = Depends(get_db),
 ) -> JobOut:
     return job_out(db, jobs.cancel_job(db, user, job_id))
+
+
+@router.get("/jobs/{job_id}/photos", response_model=list[JobPhotoOut], responses=_ERRORS)
+def job_photos(
+    job_id: uuid.UUID,
+    _viewer: User = Depends(require_approved),
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+) -> list[JobPhotoOut]:
+    """Signed read URLs for a posting's attached photos. Any approved user who
+    can see the job can see its photos (unlike private documents, which stay
+    owner/admin-only)."""
+    job = jobs.get_job(db, job_id)
+    out: list[JobPhotoOut] = []
+    for doc_id in job.photo_doc_ids:
+        doc = documents.get_document(db, doc_id)
+        if doc is None:
+            continue
+        out.append(JobPhotoOut(document_id=doc_id, read_url=documents.view_url(storage, doc)))
+    return out

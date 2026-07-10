@@ -26,6 +26,15 @@ def _require_role(user: User, expected: UserType) -> None:
         raise errors.forbidden("error.onboarding.wrong_role")
 
 
+def _compose_full_name(
+    family: str | None, middle: str | None, given: str | None
+) -> str | None:
+    """Family-first composition (Japanese/Vietnamese convention; middle sits
+    between family and given when present): 山田 太郎 / Nguyễn Văn A."""
+    parts = [p.strip() for p in (family, middle, given) if p and p.strip()]
+    return " ".join(parts) or None
+
+
 def _validate_owned_doc(db: Session, user: User, doc_id: uuid.UUID | None) -> None:
     if doc_id is None:
         return
@@ -39,10 +48,18 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     _validate_owned_doc(db, user, payload.residence_card_front_doc_id)
     _validate_owned_doc(db, user, payload.residence_card_back_doc_id)
 
+    profile = db.get(WorkerProfile, user.id)
+    full_name = (
+        _compose_full_name(payload.family_name, payload.middle_name, payload.given_name)
+        or payload.full_name
+    )
     if payload.display_name:
         user.display_name = payload.display_name
+    elif profile is None and full_name:
+        # Signup no longer asks for a display name; default it to the worker's
+        # name on first onboarding. It stays editable in profile settings.
+        user.display_name = full_name
 
-    profile = db.get(WorkerProfile, user.id)
     if profile is None:
         profile = WorkerProfile(user_id=user.id, nationality=payload.nationality,
                                 worker_class=payload.worker_class)
@@ -54,7 +71,10 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     profile.has_insurance = payload.has_insurance
     profile.bio = payload.bio
     profile.years_experience = payload.years_experience
-    profile.full_name = payload.full_name
+    profile.full_name = full_name
+    profile.family_name = payload.family_name
+    profile.given_name = payload.given_name
+    profile.middle_name = payload.middle_name
     profile.name_kana = payload.name_kana
     profile.email = payload.email
     profile.current_employer = payload.current_employer
@@ -96,6 +116,16 @@ def update_worker(db: Session, user: User, payload: WorkerProfileUpdate) -> Work
     for field, value in data.items():
         setattr(profile, field, value)
 
+    # Patching any structured name part recomposes the display full_name
+    # (unless the patch set full_name explicitly).
+    if {"family_name", "given_name", "middle_name"} & data.keys() and "full_name" not in data:
+        profile.full_name = (
+            _compose_full_name(
+                profile.family_name, profile.middle_name, profile.given_name
+            )
+            or profile.full_name
+        )
+
     db.commit()
     db.refresh(profile)
     return profile
@@ -105,10 +135,14 @@ def onboard_contractor(
     db: Session, user: User, payload: ContractorOnboardingIn
 ) -> ContractorProfile:
     _require_role(user, UserType.CONTRACTOR)
+    profile = db.get(ContractorProfile, user.id)
     if payload.display_name:
         user.display_name = payload.display_name
+    elif profile is None:
+        # Signup no longer asks for a display name; a contractor's public name
+        # defaults to the company name. Editable later in profile settings.
+        user.display_name = payload.company_name
 
-    profile = db.get(ContractorProfile, user.id)
     if profile is None:
         profile = ContractorProfile(
             user_id=user.id,

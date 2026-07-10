@@ -118,10 +118,12 @@ def test_search_pagination_is_stable_across_ties(
 
 
 def test_invalid_times_rejected(client: TestClient, approved_member: Member) -> None:
+    # end == start is ambiguous (0h vs 24h) → rejected. end < start is a valid
+    # NIGHT SHIFT (ends next day) — covered by test_night_shift_job below.
     h, _ = approved_member("contractor", "+819033330005", onboard=_CONTRACTOR_ONBOARD)
     resp = client.post(
         "/api/v1/jobs",
-        json={**_JOB, "start_time": "17:00:00", "end_time": "08:00:00"},
+        json={**_JOB, "start_time": "17:00:00", "end_time": "17:00:00"},
         headers=h,
     )
     assert resp.status_code == 422
@@ -173,3 +175,98 @@ def test_only_owner_can_edit_and_cancel(
     # Canceled job no longer appears in worker search.
     wh, _ = approved_member("worker", "+819033330010", onboard=_WORKER_ONBOARD)
     assert client.get("/api/v1/jobs", headers=wh).json() == []
+
+
+def test_night_shift_job_allows_end_before_start(
+    client: TestClient, approved_member
+) -> None:
+    # 21:00–05:00 (next day) — the UI enters this as 21:00–29:00. Only an
+    # exactly-equal start/end pair is rejected (ambiguous 0h vs 24h).
+    ch, _ = approved_member(
+        "contractor", "+819055500001",
+        onboard={"company_name": "夜間工事", "contact_person": "S", "prefecture": "Tokyo"},
+    )
+    ok = client.post(
+        "/api/v1/jobs",
+        json={
+            "trades": ["解体"], "work_date": "2026-08-01",
+            "start_time": "21:00:00", "end_time": "05:00:00",
+            "prefecture": "Tokyo", "daily_wage": 25000, "headcount": 2,
+        },
+        headers=ch,
+    )
+    assert ok.status_code in (200, 201), ok.text
+    body = ok.json()
+    assert body["start_time"] == "21:00:00" and body["end_time"] == "05:00:00"
+
+    equal = client.post(
+        "/api/v1/jobs",
+        json={
+            "trades": ["解体"], "work_date": "2026-08-01",
+            "start_time": "08:00:00", "end_time": "08:00:00",
+            "prefecture": "Tokyo", "daily_wage": 25000,
+        },
+        headers=ch,
+    )
+    assert equal.status_code == 422
+
+
+def test_job_photos_attach_and_public_read(
+    client: TestClient, approved_member: Member
+) -> None:
+    ch, _ = approved_member("contractor", "+819055500002", onboard=_CONTRACTOR_ONBOARD)
+    # Upload one photo document, reuse it on the posting.
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "job_photo", "content_type": "image/jpeg"},
+        headers=ch,
+    ).json()
+    doc = client.post(
+        "/api/v1/documents",
+        json={"doc_type": "job_photo", "storage_path": ticket["storage_path"]},
+        headers=ch,
+    ).json()
+
+    created = client.post(
+        "/api/v1/jobs", json={**_JOB, "photo_doc_ids": [doc["id"]]}, headers=ch
+    )
+    assert created.status_code == 201, created.text
+    job = created.json()
+    assert job["photo_doc_ids"] == [doc["id"]]
+
+    # Another approved user (a worker) can read the photo URLs via the job…
+    wh, _ = approved_member(
+        "worker", "+819055500003",
+        onboard={"nationality": "JP", "worker_class": "employee"},
+    )
+    photos = client.get(f"/api/v1/jobs/{job['id']}/photos", headers=wh)
+    assert photos.status_code == 200, photos.text
+    assert photos.json()[0]["document_id"] == doc["id"]
+    assert photos.json()[0]["read_url"]
+    # …but NOT the private document view-url endpoint.
+    assert (
+        client.get(f"/api/v1/documents/{doc['id']}/view-url", headers=wh).status_code
+        == 403
+    )
+
+
+def test_job_photos_must_be_own_job_photo_docs(
+    client: TestClient, approved_member: Member
+) -> None:
+    ch, _ = approved_member("contractor", "+819055500004", onboard=_CONTRACTOR_ONBOARD)
+    other, _ = approved_member("contractor", "+819055500005", onboard=_CONTRACTOR_ONBOARD)
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "job_photo", "content_type": "image/jpeg"},
+        headers=other,
+    ).json()
+    foreign = client.post(
+        "/api/v1/documents",
+        json={"doc_type": "job_photo", "storage_path": ticket["storage_path"]},
+        headers=other,
+    ).json()
+    resp = client.post(
+        "/api/v1/jobs", json={**_JOB, "photo_doc_ids": [foreign["id"]]}, headers=ch
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "invalid_photo"
