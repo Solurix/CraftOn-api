@@ -6,7 +6,7 @@ import datetime
 import uuid
 
 from sqlalchemy import Date, ForeignKey, Index, Integer, String, Text, Time, text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPKMixin
@@ -34,6 +34,12 @@ class Job(UUIDPKMixin, TimestampMixin, Base):
     daily_wage: Mapped[int] = mapped_column(Integer, nullable=False)  # JPY
     headcount: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Site/work photos attached to the posting — references to the contractor's
+    # own `job_photo` documents, so one upload can be reused across postings
+    # (no duplicate objects in Cloud Storage).
+    photo_doc_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default=text("'{}'::uuid[]")
+    )
     status: Mapped[JobStatus] = mapped_column(
         pg_enum(JobStatus, "job_status"),
         nullable=False,

@@ -199,3 +199,36 @@ def test_work_history_description_roundtrip(
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["work_history"] == [entry]
+
+
+def test_worker_structured_name_composes_full_name(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    h = auth_headers("+819011110023")
+    _signup(client, h, "worker", "")
+    resp = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "VN",
+            "worker_class": "employee",
+            "visa_expiry_date": "2030-01-01",
+            "family_name": "Nguyễn",
+            "middle_name": "Văn",
+            "given_name": "An",
+        },
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    # Family-first composition, and the display name defaults to it.
+    assert body["full_name"] == "Nguyễn Văn An"
+    assert body["display_name"] == "Nguyễn Văn An"
+    assert (body["family_name"], body["middle_name"], body["given_name"]) == (
+        "Nguyễn", "Văn", "An",
+    )
+
+    # Patching one part recomposes full_name.
+    patched = client.patch(
+        "/api/v1/workers/me", json={"given_name": "Bình"}, headers=h
+    ).json()
+    assert patched["full_name"] == "Nguyễn Văn Bình"

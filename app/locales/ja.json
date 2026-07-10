@@ -65,5 +65,8 @@
   "role.contractor": "工務店",
   "role.admin": "管理者",
   "error.auth.reset_no_account": "この電話番号で登録されたアカウントはありません。",
-  "error.document.not_found": "ドキュメントが見つかりません。"
+  "error.document.not_found": "ドキュメントが見つかりません。",
+  "error.trade.exists": "この職種名はすでに登録されています。",
+  "error.trade.merge_self": "同じ職種にはマージできません。",
+  "error.job.invalid_photo": "写真が不正です。自分がアップロードした現場写真のみ添付できます。"
 }

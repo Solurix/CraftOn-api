@@ -13,6 +13,7 @@ from app.models.message import Message
 from app.models.notification import Notification
 from app.models.review import Review
 from app.models.saved_job import SavedJob
+from app.models.trade import Trade
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 
@@ -28,6 +29,7 @@ __all__ = [
     "Notification",
     "Review",
     "SavedJob",
+    "Trade",
     "User",
     "WorkerProfile",
 ]

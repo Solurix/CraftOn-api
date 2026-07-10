@@ -84,21 +84,49 @@ class GcsStorage:
             self._client = storage.Client()
         return self._client.bucket(self._bucket_name)
 
+    def _signed_url(self, storage_path: str, method: str, content_type: str | None) -> str:
+        import datetime as _dt
+
+        blob = self._bucket().blob(storage_path)
+        kwargs: dict[str, Any] = {
+            "version": "v4",
+            "expiration": _dt.timedelta(seconds=self._ttl),
+            "method": method,
+        }
+        if content_type is not None:
+            kwargs["content_type"] = content_type
+        try:
+            # Works when the credentials carry a private key (local dev with a
+            # service-account key file).
+            return str(blob.generate_signed_url(**kwargs))
+        except AttributeError:
+            # Keyless runtime (Cloud Run/GCE): ambient compute credentials
+            # cannot sign locally — the library raises "you need a private key
+            # to sign credentials". Route signing through the IAM SignBlob API
+            # instead; the runtime SA has roles/iam.serviceAccountTokenCreator
+            # on itself for exactly this (infra: api_token_creator).
+            import google.auth
+            from google.auth.transport import requests as ga_requests
+
+            credentials, _ = google.auth.default()
+            credentials.refresh(ga_requests.Request())
+            sa_email = getattr(credentials, "service_account_email", None)
+            if not sa_email:
+                raise
+            return str(
+                blob.generate_signed_url(
+                    **kwargs,
+                    service_account_email=sa_email,
+                    access_token=credentials.token,
+                )
+            )
+
     def create_upload_ticket(
         self, user_id: uuid.UUID, doc_type: DocType, content_type: str
     ) -> UploadTicket:
-        import datetime as _dt
-
         path = build_object_path(user_id, doc_type)
-        blob = self._bucket().blob(path)
-        url = blob.generate_signed_url(
-            version="v4",
-            expiration=_dt.timedelta(seconds=self._ttl),
-            method="PUT",
-            content_type=content_type,
-        )
         return UploadTicket(
-            upload_url=url,
+            upload_url=self._signed_url(path, "PUT", content_type),
             storage_path=path,
             method="PUT",
             headers={"Content-Type": content_type},
@@ -106,14 +134,7 @@ class GcsStorage:
         )
 
     def read_url(self, storage_path: str) -> str:
-        import datetime as _dt
-
-        blob = self._bucket().blob(storage_path)
-        return blob.generate_signed_url(
-            version="v4",
-            expiration=_dt.timedelta(seconds=self._ttl),
-            method="GET",
-        )
+        return self._signed_url(storage_path, "GET", None)
 
 
 @lru_cache
