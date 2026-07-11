@@ -111,8 +111,18 @@ jobs:
           docker push "$IMAGE:dev"
           docker push "$IMAGE:${GITHUB_SHA}"
 
+      # Deploy the image and, belt-and-suspenders, scrub any preview config that may
+      # have leaked onto the live service in the past. Preview environments are now
+      # separate `crafton-api-dev-pr<N>` services and can no longer poison this one,
+      # but an older leak (CRAFTON_DB_NAME=crafton_pr<N> + preview-pr label, which
+      # once wedged this service on a dropped DB) self-heals on the next merge to
+      # main. STORAGE_MODE=gcs is re-asserted to the canonical dev value (mirrors
+      # infra/terraform/environments/dev/main.tf) in case a leak flipped it to fake.
       - name: Deploy to Cloud Run (migrates at startup, then serves)
         run: |
           gcloud run services update "$SERVICE" \
             --project "$PROJECT_ID" --region "$REGION" \
-            --image "$IMAGE:dev"
+            --image "$IMAGE:dev" \
+            --remove-env-vars CRAFTON_DB_NAME \
+            --update-env-vars CRAFTON_STORAGE_MODE=gcs \
+            --remove-labels preview-pr
