@@ -2,10 +2,19 @@ name: preview-deploy
 
 # Per-PR preview environment for the API.
 #
-# Each PR gets an isolated `crafton_pr<N>` database on the shared `crafton-dev`
-# Cloud SQL instance plus a --no-traffic --tag pr<N> revision of crafton-api-dev
-# that migrates at boot against that DB and is smoke-tested in isolation. Prod
-# (the `crafton` DB / the live revision) is never touched.
+# Each PR gets a fully isolated, STANDALONE Cloud Run service `crafton-api-dev-pr<N>`
+# (NOT a tagged revision of the shared crafton-api-dev) plus its own `crafton_pr<N>`
+# database on the shared `crafton-dev` Cloud SQL instance. The preview migrates at
+# boot against that DB and is smoke-tested in isolation.
+#
+# WHY A SEPARATE SERVICE (not `--no-traffic --tag`): a tagged revision does NOT
+# sandbox configuration. `gcloud run deploy <shared-service> --update-env-vars …`
+# mutates the SHARED service's base template, so CRAFTON_DB_NAME=crafton_pr<N> (and
+# the preview-pr label) leaked onto crafton-api-dev; the next normal revision
+# inherited it and, once crafton_pr<N> was dropped on PR close, the live service
+# could no longer boot (`FATAL: database "crafton_pr<N>" does not exist`). A
+# dedicated per-PR service has its own template, so previews can never touch the
+# live service. See crafton-infra docs/12.
 #
 # Trust model: pull_request_target runs this workflow (and its credentialed steps)
 # from `main`, so a PR can't rewrite them; CODEOWNERS gates the workflow + Dockerfile.
@@ -39,7 +48,9 @@ jobs:
     env:
       PROJECT_ID: crafton-dev-500709
       REGION: asia-northeast1
-      SERVICE: crafton-api-dev
+      # Base (live) service — described only to stay in sync with naming; previews
+      # deploy to ${BASE_SERVICE}-pr<N>, a separate service, and never touch this one.
+      BASE_SERVICE: crafton-api-dev
       IMAGE: asia-northeast1-docker.pkg.dev/crafton-dev-500709/crafton/api
       WIF_PROVIDER: projects/784671749504/locations/global/workloadIdentityPools/github-actions/providers/github
       DEPLOYER_SA: crafton-deployer@crafton-dev-500709.iam.gserviceaccount.com
@@ -48,7 +59,7 @@ jobs:
       SQL_CONNECTION: crafton-dev-500709:asia-northeast1:crafton-dev
       DB_SECRET: crafton-db-url
       PR: ${{ github.event.number }}
-      # PR head sha — changes on every push, so the revision suffix stays unique.
+      # PR head sha — changes on every push, so the image tag stays unique.
       # (GITHUB_SHA is the base-branch sha under pull_request_target and would collide.)
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
@@ -72,10 +83,9 @@ jobs:
         run: |
           SHORT_SHA="${HEAD_SHA::7}"
           {
-            echo "TAG=pr${PR}"
+            echo "PREVIEW_SERVICE=${BASE_SERVICE}-pr${PR}"
             echo "DB=crafton_pr${PR}"
             echo "SHORT_SHA=${SHORT_SHA}"
-            echo "REV_SUFFIX=pr${PR}-${SHORT_SHA}"
             echo "IMAGE_TAG=${IMAGE}:pr${PR}-${SHORT_SHA}"
           } >> "$GITHUB_ENV"
 
@@ -95,37 +105,40 @@ jobs:
             -t "$IMAGE_TAG" .
           docker push "$IMAGE_TAG"
 
-      # Deploy a no-traffic tagged revision. DB access is attached EXPLICITLY
-      # (service account + Cloud SQL instance + secret) — template inheritance is
-      # unreliable and the preview then 500s on every DB op. --update-env-vars
-      # MERGES (adds CRAFTON_DB_NAME, flips storage to fake); --set-env-vars would
-      # wipe the rest of the service's env. Migrations run at container boot against
-      # $DB (Dockerfile entrypoint), serialized by the advisory lock in env.py.
-      - name: Deploy preview revision (no traffic)
+      # Deploy a DEDICATED per-PR service. Because it's standalone, the full runtime
+      # config is set EXPLICITLY (there's no shared template to inherit from, and
+      # crucially nothing this deploy does can leak onto the live service):
+      #   * --service-account + --add-cloudsql-instances + --set-secrets → DB access
+      #   * --set-env-vars → the complete preview env (CRAFTON_DB_NAME points the app
+      #     at the isolated DB; STORAGE_MODE=fake so it never writes the shared bucket)
+      #   * --allow-unauthenticated → the smoke test (and humans) can reach it, just
+      #     like the public dev service
+      # Migrations run at container boot against $DB (Dockerfile entrypoint),
+      # serialized by the advisory lock in env.py.
+      - name: Deploy preview service
         run: |
-          gcloud run deploy "$SERVICE" \
+          gcloud run deploy "$PREVIEW_SERVICE" \
             --project "$PROJECT_ID" --region "$REGION" \
             --image "$IMAGE_TAG" \
-            --no-traffic --tag "$TAG" \
-            --revision-suffix "$REV_SUFFIX" \
             --labels "preview-pr=${PR}" \
             --service-account "$RUNTIME_SA" \
             --add-cloudsql-instances "$SQL_CONNECTION" \
-            --update-secrets "CRAFTON_DATABASE_URL=${DB_SECRET}:latest" \
-            --update-env-vars "CRAFTON_DB_NAME=${DB},CRAFTON_ENV=dev,CRAFTON_STORAGE_MODE=fake" \
+            --set-secrets "CRAFTON_DATABASE_URL=${DB_SECRET}:latest" \
+            --set-env-vars "CRAFTON_ENV=dev,CRAFTON_AUTH_MODE=fake,CRAFTON_STORAGE_MODE=fake,CRAFTON_FIREBASE_PROJECT_ID=${PROJECT_ID},CRAFTON_DB_NAME=${DB}" \
+            --allow-unauthenticated \
             --quiet
 
       - name: Resolve preview URL
         run: |
-          BASE=$(gcloud run services describe "$SERVICE" \
+          API_URL=$(gcloud run services describe "$PREVIEW_SERVICE" \
             --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
-          if [ -z "$BASE" ]; then echo "could not read service URL"; exit 1; fi
-          echo "API_URL=https://${TAG}---${BASE#https://}" >> "$GITHUB_ENV"
+          if [ -z "$API_URL" ]; then echo "could not read preview service URL"; exit 1; fi
+          echo "API_URL=$API_URL" >> "$GITHUB_ENV"
 
       # Liveness via /openapi.json (NOT /healthz — Google's edge returns 404 for it
       # on *.run.app). Then signup→login→/me exercises a real write+read against the
       # isolated DB, proving migrations ran. The first request cold-starts the
-      # revision, so allow generous time for boot + migrate.
+      # service, so allow generous time for boot + migrate.
       - name: Smoke test the preview
         run: |
           echo "Preview API: $API_URL"
@@ -173,19 +186,18 @@ jobs:
         env:
           API_URL: ${{ env.API_URL }}
           DB: ${{ env.DB }}
-          TAG: ${{ env.TAG }}
-          REV_SUFFIX: ${{ env.REV_SUFFIX }}
+          PREVIEW_SERVICE: ${{ env.PREVIEW_SERVICE }}
         with:
           script: |
             const marker = '<!-- crafton-preview-api -->';
-            const { API_URL, DB, TAG, REV_SUFFIX } = process.env;
+            const { API_URL, DB, PREVIEW_SERVICE } = process.env;
             const pr = context.issue.number;
             const body = [
               marker,
               '### 🔎 API preview',
               `- **URL:** ${API_URL}`,
               `- **Database:** \`${DB}\` (isolated, migrated)`,
-              `- **Revision:** \`${REV_SUFFIX}\` — no-traffic, tag \`${TAG}\``,
+              `- **Service:** \`${PREVIEW_SERVICE}\` — standalone, isolated from the live API`,
               '',
               'Smoke test (signup → login → `/me`) passed against the isolated DB.',
               'Torn down automatically when this PR closes.',
