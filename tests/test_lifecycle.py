@@ -6,30 +6,11 @@ from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 
-Member = Callable[..., tuple[dict[str, str], str]]
-
-_CONTRACTOR = {"company_name": "ABC", "contact_person": "S", "prefecture": "Tokyo"}
-_WORKER = {"nationality": "JP", "worker_class": "employee", "trades": ["大工"]}
-_JOB = {
-    "trades": ["大工"], "work_date": "2026-07-01",
-    "start_time": "08:00:00", "end_time": "17:00:00",
-    "prefecture": "Tokyo", "daily_wage": 18000, "headcount": 1,
-}
-
-_phone = iter(f"+8190570{i:05d}" for i in range(1, 99999))
-
-
-def _confirmed(client: TestClient, approved_member: Member) -> tuple[dict, dict, str]:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
-    app_id = client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh).json()["id"]
-    mid = client.post(f"/api/v1/applications/{app_id}/confirm", headers=ch).json()["id"]
-    return ch, wh, mid
+from tests.factories import Member, confirmed_matching
 
 
 def test_full_happy_cycle(client: TestClient, approved_member: Member) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
 
     ci = client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     assert ci.status_code == 200 and ci.json()["status"] == "checked_in"
@@ -50,14 +31,14 @@ def test_full_happy_cycle(client: TestClient, approved_member: Member) -> None:
 
 
 def test_checkin_is_worker_only(client: TestClient, approved_member: Member) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     assert client.post(f"/api/v1/matchings/{mid}/check-in", headers=ch).status_code == 403
 
 
 def test_approve_requires_completion_request(
     client: TestClient, approved_member: Member
 ) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     early = client.post(f"/api/v1/matchings/{mid}/approve-completion", headers=ch)
     assert early.status_code == 409
@@ -67,7 +48,7 @@ def test_approve_requires_completion_request(
 def test_complete_request_requires_checkin(
     client: TestClient, approved_member: Member
 ) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     resp = client.post(f"/api/v1/matchings/{mid}/complete-request", headers=wh)
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "not_checked_in"
@@ -76,7 +57,7 @@ def test_complete_request_requires_checkin(
 def test_double_checkin_is_illegal_transition(
     client: TestClient, approved_member: Member
 ) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     again = client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     assert again.status_code == 409
@@ -84,7 +65,7 @@ def test_double_checkin_is_illegal_transition(
 
 
 def test_cancel_then_checkin_illegal(client: TestClient, approved_member: Member) -> None:
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     canceled = client.post(f"/api/v1/matchings/{mid}/cancel", headers=wh)
     assert canceled.json()["status"] == "canceled"
     assert client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh).status_code == 409
@@ -94,7 +75,7 @@ def test_admin_marks_fee_paid(
     client: TestClient, approved_member: Member, seed_admin: Callable[..., dict[str, str]]
 ) -> None:
     admin = seed_admin()
-    ch, wh, mid = _confirmed(client, approved_member)
+    ch, wh, mid = confirmed_matching(client, approved_member)
     client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     client.post(f"/api/v1/matchings/{mid}/complete-request", headers=wh)
     client.post(f"/api/v1/matchings/{mid}/approve-completion", headers=ch)

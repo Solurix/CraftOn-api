@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -12,21 +11,15 @@ from app.api.deps import require_approved
 from app.db.session import get_db
 from app.models.enums import ReviewDirection
 from app.models.user import User
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_403_404_409
 from app.schemas.review import ReviewCreate, ReviewOut
 from app.services import reviews
 
 router = APIRouter(tags=["reviews"])
 
-_ERRORS: dict[int | str, dict[str, Any]] = {
-    403: {"model": ErrorResponse},
-    404: {"model": ErrorResponse},
-    409: {"model": ErrorResponse},
-}
-
 
 @router.post("/matchings/{matching_id}/reviews", response_model=ReviewOut,
-             status_code=201, responses=_ERRORS)
+             status_code=201, responses=RESP_403_404_409)
 def create_review(
     matching_id: uuid.UUID,
     payload: ReviewCreate,

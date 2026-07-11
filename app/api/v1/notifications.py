@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -13,16 +12,11 @@ from app.core.i18n import translate
 from app.db.session import get_db
 from app.models.notification import Notification
 from app.models.user import User
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_403_404
 from app.schemas.notification import MarkAllReadOut, NotificationOut, UnreadCountOut
 from app.services import notifications
 
 router = APIRouter(tags=["notifications"])
-
-_ERRORS: dict[int | str, dict[str, Any]] = {
-    403: {"model": ErrorResponse},
-    404: {"model": ErrorResponse},
-}
 
 
 def _render(n: Notification, locale: str) -> NotificationOut:
@@ -69,7 +63,7 @@ def read_all(
 
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationOut,
-             responses=_ERRORS)
+             responses=RESP_403_404)
 def mark_read(
     notification_id: uuid.UUID,
     user: User = Depends(get_current_user),

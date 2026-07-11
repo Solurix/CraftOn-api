@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_claims, get_current_user, require_active
 from app.core import errors, security
 from app.core.auth import FirebaseClaims
-from app.core.i18n import resolve_locale
+from app.core.i18n import SUPPORTED_LOCALES, resolve_locale
 from app.core.identifiers import normalize_email, normalize_phone, normalize_username
 from app.core.session_token import issue_session_token
 from app.db.session import get_db
@@ -35,6 +35,7 @@ from app.schemas.user import (
     SetPasswordIn,
     UserOut,
 )
+from app.services.onboarding import contractor_out, worker_out
 
 router = APIRouter(tags=["auth"])
 
@@ -70,10 +71,12 @@ def create_session(
 
     user = db.scalar(select(User).where(User.phone_number == claims.phone_number))
     if user is not None:
-        request.state.locale = user.preferred_language
-        if payload.preferred_language and payload.preferred_language in ("ja", "en"):
+        if payload.preferred_language and payload.preferred_language in SUPPORTED_LOCALES:
             user.preferred_language = payload.preferred_language
             db.commit()
+        # Set after the potential language switch so this very response (and any
+        # error rendered later in the request) already uses the new locale.
+        request.state.locale = user.preferred_language
         return SessionOut(user=UserOut.model_validate(user), created=False)
 
     # First login → register. Role + login credentials are required.
@@ -237,8 +240,6 @@ def update_account(
 @router.get("/me", response_model=MeOut, responses={401: {"model": ErrorResponse}})
 def get_me(user: User = Depends(get_current_user)) -> MeOut:
     """Current user + their profile (if onboarded)."""
-    from app.api.v1.onboarding import contractor_out, worker_out
-
     worker = (
         worker_out(user.worker_profile, user) if user.worker_profile is not None else None
     )

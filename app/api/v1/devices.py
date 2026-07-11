@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -11,16 +10,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import admin_user, get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_403_404
 from app.schemas.device import DeviceOut
 from app.services import devices, onboarding
 
 router = APIRouter(tags=["devices"])
-
-_ERRORS: dict[int | str, dict[str, Any]] = {
-    403: {"model": ErrorResponse},
-    404: {"model": ErrorResponse},
-}
 
 
 @router.get("/me/devices", response_model=list[DeviceOut])
@@ -32,7 +26,7 @@ def my_devices(
 
 
 @router.post(
-    "/me/devices/{device_id}/revoke", response_model=DeviceOut, responses=_ERRORS
+    "/me/devices/{device_id}/revoke", response_model=DeviceOut, responses=RESP_403_404
 )
 def revoke_my_device(
     device_id: uuid.UUID,

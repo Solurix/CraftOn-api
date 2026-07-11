@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -18,23 +17,15 @@ from app.core.clock import tokyo_today
 from app.core.config import ConfigService
 from app.db.session import get_db
 from app.models.application import Application
-from app.models.contractor_profile import ContractorProfile
-from app.models.job import Job
 from app.models.matching import Matching
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 from app.schemas.application import ApplicantOut, ApplicationOut
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_403_404_409
 from app.schemas.matching import MatchingOut, WorkHistoryOut
 from app.services import applications, lifecycle, matchings, terms
 
 router = APIRouter(tags=["matching"])
-
-_ERRORS: dict[int | str, dict[str, Any]] = {
-    403: {"model": ErrorResponse},
-    404: {"model": ErrorResponse},
-    409: {"model": ErrorResponse},
-}
 
 
 def _applicant_out(db: Session, app_row: Application) -> ApplicantOut:
@@ -55,15 +46,7 @@ def _applicant_out(db: Session, app_row: Application) -> ApplicantOut:
 
 
 def matching_out(db: Session, matching: Matching, *, locale: str) -> MatchingOut:
-    out = MatchingOut.model_validate(matching)
-    job = db.get(Job, matching.job_id)
-    worker = db.get(User, matching.worker_id)
-    company = db.get(ContractorProfile, job.contractor_id) if job else None
-    out.contractor_id = job.contractor_id if job else None
-    out.worker_display_name = worker.display_name if worker else None
-    out.contractor_company_name = company.company_name if company else None
-    out.work_date = job.work_date if job else None
-    out.prefecture = job.prefecture if job else None
+    out = matchings.enrich_matching(db, matching)
     out.terms = terms.generate_terms(
         contract_type=matching.contract_type,
         worker_name=out.worker_display_name or "",
@@ -78,7 +61,7 @@ def matching_out(db: Session, matching: Matching, *, locale: str) -> MatchingOut
 # -- applications ----------------------------------------------------------
 
 @router.post("/jobs/{job_id}/apply", response_model=ApplicationOut, status_code=201,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def apply_to_job(
     job_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -88,7 +71,7 @@ def apply_to_job(
 
 
 @router.get("/jobs/{job_id}/applications", response_model=list[ApplicantOut],
-            responses=_ERRORS)
+            responses=RESP_403_404_409)
 def list_applicants(
     job_id: uuid.UUID,
     user: User = Depends(approved_contractor),
@@ -99,7 +82,7 @@ def list_applicants(
 
 
 @router.post("/applications/{application_id}/confirm", response_model=MatchingOut,
-             status_code=201, responses=_ERRORS)
+             status_code=201, responses=RESP_403_404_409)
 def confirm_application(
     application_id: uuid.UUID,
     user: User = Depends(approved_contractor),
@@ -113,7 +96,7 @@ def confirm_application(
 
 
 @router.post("/applications/{application_id}/reject", response_model=ApplicationOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def reject_application(
     application_id: uuid.UUID,
     user: User = Depends(approved_contractor),
@@ -125,7 +108,7 @@ def reject_application(
 
 
 @router.post("/applications/{application_id}/withdraw", response_model=ApplicationOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def withdraw_application(
     application_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -170,7 +153,7 @@ def my_work_history(
     )
 
 
-@router.get("/matchings/{matching_id}", response_model=MatchingOut, responses=_ERRORS)
+@router.get("/matchings/{matching_id}", response_model=MatchingOut, responses=RESP_403_404_409)
 def get_matching(
     matching_id: uuid.UUID,
     user: User = Depends(require_approved),
@@ -183,7 +166,7 @@ def get_matching(
 # -- day-of lifecycle ------------------------------------------------------
 
 @router.post("/matchings/{matching_id}/check-in", response_model=MatchingOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def check_in(
     matching_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -194,7 +177,7 @@ def check_in(
 
 
 @router.post("/matchings/{matching_id}/complete-request", response_model=MatchingOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def complete_request(
     matching_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -205,7 +188,7 @@ def complete_request(
 
 
 @router.post("/matchings/{matching_id}/approve-completion", response_model=MatchingOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def approve_completion(
     matching_id: uuid.UUID,
     user: User = Depends(approved_contractor),
@@ -216,7 +199,7 @@ def approve_completion(
 
 
 @router.post("/matchings/{matching_id}/cancel", response_model=MatchingOut,
-             responses=_ERRORS)
+             responses=RESP_403_404_409)
 def cancel_matching(
     matching_id: uuid.UUID,
     user: User = Depends(require_approved),

@@ -56,6 +56,8 @@ migrations/          Alembic (env.py + versions/)
 tests/               pytest (unit + integration)
 ```
 
+See `docs/MAP.md` for a per-module index (endpoint map + where-to-change-what).
+
 ## Conventions (API-local)
 
 - **Never hardcode a value from `docs/07`** — read it through `ConfigService`.

@@ -17,8 +17,61 @@ from app.models.document import Document
 from app.models.enums import UserType
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
-from app.schemas.contractor import ContractorOnboardingIn, ContractorProfileUpdate
-from app.schemas.worker import WorkerOnboardingIn, WorkerProfileUpdate
+from app.schemas.contractor import (
+    ContractorOnboardingIn,
+    ContractorProfileOut,
+    ContractorProfileUpdate,
+)
+from app.schemas.worker import WorkerOnboardingIn, WorkerProfileOut, WorkerProfileUpdate
+
+
+def worker_out(profile: WorkerProfile, user: User) -> WorkerProfileOut:
+    """Build the owner/admin-facing worker profile DTO."""
+    return WorkerProfileOut(
+        user_id=profile.user_id,
+        display_name=user.display_name,
+        status=user.status,
+        nationality=profile.nationality,
+        worker_class=profile.worker_class,
+        trades=profile.trades,
+        tools=profile.tools,
+        has_insurance=profile.has_insurance,
+        bio=profile.bio,
+        years_experience=profile.years_experience,
+        full_name=profile.full_name,
+        family_name=profile.family_name,
+        given_name=profile.given_name,
+        middle_name=profile.middle_name,
+        name_kana=profile.name_kana,
+        email=profile.email,
+        current_employer=profile.current_employer,
+        current_employer_public=profile.current_employer_public,
+        prefecture=profile.prefecture,
+        area=profile.area,
+        work_history=profile.work_history,
+        qualifications=profile.qualifications,
+        skills=profile.skills,
+        trust_score=profile.trust_score,
+        visa_expiry_date=profile.visa_expiry_date,
+        work_restriction=profile.work_restriction,
+        residence_card_front_doc_id=profile.residence_card_front_doc_id,
+        residence_card_back_doc_id=profile.residence_card_back_doc_id,
+    )
+
+
+def contractor_out(profile: ContractorProfile, user: User) -> ContractorProfileOut:
+    """Build the owner/admin-facing contractor profile DTO."""
+    return ContractorProfileOut(
+        user_id=profile.user_id,
+        display_name=user.display_name,
+        status=user.status,
+        company_name=profile.company_name,
+        contact_person=profile.contact_person,
+        prefecture=profile.prefecture,
+        address=profile.address,
+        bio=profile.bio,
+        rating=profile.rating,
+    )
 
 
 def _require_role(user: User, expected: UserType) -> None:
