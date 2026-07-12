@@ -278,3 +278,39 @@ def test_job_photos_must_be_own_job_photo_docs(
     )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "invalid_photo"
+
+
+def test_job_photo_registers_approved_but_vetting_docs_stay_pending(
+    client: TestClient, approved_member: Member
+) -> None:
+    """Work photos are post-moderated — the only approval is per-account
+    (vetting), so they're born `approved`. Identity docs still start pending."""
+    ch, _ = approved_member(
+        "contractor", "+819055500099", onboard=_CONTRACTOR_ONBOARD
+    )
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "job_photo", "content_type": "image/jpeg"},
+        headers=ch,
+    ).json()
+    photo = client.post(
+        "/api/v1/documents",
+        json={"doc_type": "job_photo", "storage_path": ticket["storage_path"]},
+        headers=ch,
+    ).json()
+    assert photo["review_status"] == "approved"
+
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "residence_card_front", "content_type": "image/jpeg"},
+        headers=ch,
+    ).json()
+    card = client.post(
+        "/api/v1/documents",
+        json={
+            "doc_type": "residence_card_front",
+            "storage_path": ticket["storage_path"],
+        },
+        headers=ch,
+    ).json()
+    assert card["review_status"] == "pending"

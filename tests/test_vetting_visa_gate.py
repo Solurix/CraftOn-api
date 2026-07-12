@@ -276,8 +276,9 @@ def test_rejected_residence_card_does_not_satisfy_visa_gate(
 def test_approve_does_not_blanket_approve_job_photos(
     client: TestClient, auth_headers: Headers, seed_admin: Headers
 ) -> None:
-    """Approval reviews identity/compliance documents only — an unrelated
-    ``job_photo`` upload must stay pending."""
+    """User vetting reviews identity/compliance documents only. Work photos
+    are post-moderated: born ``approved`` at registration (the only approval
+    in the product is the per-account decision) and untouched by vetting."""
     admin = seed_admin()
     h = auth_headers("+819022220013")
     uid = _signup_worker(client, h)
@@ -285,10 +286,15 @@ def test_approve_does_not_blanket_approve_job_photos(
     _register_doc(client, h, "job_photo")
     _onboard(client, h, nationality="JP")
 
+    docs = client.get("/api/v1/documents/me", headers=h).json()
+    by_type = {d["doc_type"]: d["review_status"] for d in docs}
+    assert by_type["photo_id"] == "pending"
+    assert by_type["job_photo"] == "approved"  # post-moderated, not vetted
+
     resp = client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
     assert resp.status_code == 200, resp.text
 
     docs = client.get("/api/v1/documents/me", headers=h).json()
     by_type = {d["doc_type"]: d["review_status"] for d in docs}
     assert by_type["photo_id"] == "approved"
-    assert by_type["job_photo"] == "pending"
+    assert by_type["job_photo"] == "approved"

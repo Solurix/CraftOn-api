@@ -23,6 +23,11 @@ def register_document(
     db: Session, user: User, doc_type: DocType, storage_path: str
 ) -> Document:
     doc = Document(user_id=user.id, doc_type=doc_type, storage_path=storage_path)
+    # Work photos are post-moderated, not review-gated: the only approval in the
+    # product is the per-account vetting decision. They're born approved and an
+    # admin can still reject (= hide) an inappropriate one later.
+    if doc_type is DocType.JOB_PHOTO:
+        doc.review_status = DocReviewStatus.APPROVED
     db.add(doc)
     db.commit()
     db.refresh(doc)
