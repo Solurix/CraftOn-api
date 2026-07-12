@@ -137,8 +137,12 @@ def onboard_worker(db: Session, user: User, payload: WorkerOnboardingIn) -> Work
     profile.work_history = [e.model_dump() for e in payload.work_history]
     profile.qualifications = payload.qualifications
     profile.skills = payload.skills
-    profile.residence_card_front_doc_id = payload.residence_card_front_doc_id
-    profile.residence_card_back_doc_id = payload.residence_card_back_doc_id
+    # Residence-card links are only overwritten when explicitly sent (same
+    # exclude_unset semantics as the PATCH path) — a repeat onboarding POST
+    # that omits them must not silently unlink the visa documents (docs/08).
+    for doc_field in ("residence_card_front_doc_id", "residence_card_back_doc_id"):
+        if doc_field in payload.model_fields_set:
+            setattr(profile, doc_field, getattr(payload, doc_field))
     profile.visa_expiry_date = payload.visa_expiry_date
     profile.work_restriction = payload.work_restriction
 

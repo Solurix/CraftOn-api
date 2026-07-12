@@ -176,13 +176,15 @@ def test_reject_marks_documents_rejected(
     assert docs[0]["review_note"] == "blurry"
 
 
-def test_suspend_then_reactivate(
+def test_suspend_then_reactivate_approved_worker(
     client: TestClient, auth_headers: Headers, seed_admin: Headers
 ) -> None:
     admin = seed_admin()
     h = auth_headers("+819022220009")
     uid = _signup_worker(client, h)
     _onboard(client, h, nationality="JP")
+    approved = client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
+    assert approved.json()["status"] == "approved"
 
     suspended = client.post(
         f"/api/v1/admin/users/{uid}/suspend", json={"suspend": True}, headers=admin
@@ -196,7 +198,97 @@ def test_suspend_then_reactivate(
     )
     assert blocked.status_code == 403
 
+    # Unsuspending a worker who passes the gate restores approved.
     reactivated = client.post(
         f"/api/v1/admin/users/{uid}/suspend", json={"suspend": False}, headers=admin
     )
     assert reactivated.json()["status"] == "approved"
+
+
+def test_unsuspend_does_not_force_approve_unvetted_worker(
+    client: TestClient, auth_headers: Headers, seed_admin: Headers
+) -> None:
+    """Suspend→unsuspend must not bypass the visa gate: a pending non-JP worker
+    without a card lands back on PENDING, not APPROVED (unsuspend still succeeds)."""
+    admin = seed_admin()
+    h = auth_headers("+819022220010")
+    uid = _signup_worker(client, h)
+    _onboard(client, h, nationality="VN")  # no residence card → gate fails
+
+    suspended = client.post(
+        f"/api/v1/admin/users/{uid}/suspend", json={"suspend": True}, headers=admin
+    )
+    assert suspended.json()["status"] == "suspended"
+
+    reactivated = client.post(
+        f"/api/v1/admin/users/{uid}/suspend", json={"suspend": False}, headers=admin
+    )
+    assert reactivated.status_code == 200, reactivated.text
+    assert reactivated.json()["status"] == "pending"
+
+    # And they remain unapprovable until the gate passes.
+    resp = client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "visa_card_required"
+
+
+def test_unsuspend_profileless_user_lands_on_pending(
+    client: TestClient, auth_headers: Headers, seed_admin: Headers
+) -> None:
+    admin = seed_admin()
+    h = auth_headers("+819022220011")
+    uid = _signup_worker(client, h)  # never onboarded → no profile
+
+    client.post(f"/api/v1/admin/users/{uid}/suspend", json={"suspend": True}, headers=admin)
+    reactivated = client.post(
+        f"/api/v1/admin/users/{uid}/suspend", json={"suspend": False}, headers=admin
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["status"] == "pending"
+
+
+def test_rejected_residence_card_does_not_satisfy_visa_gate(
+    client: TestClient, auth_headers: Headers, seed_admin: Headers
+) -> None:
+    """A rejected card = no card: doc ids on the profile are not enough."""
+    admin = seed_admin()
+    h = auth_headers("+819022220012")
+    uid = _signup_worker(client, h)
+    front = _register_doc(client, h, "residence_card_front")
+    back = _register_doc(client, h, "residence_card_back")
+    _onboard(
+        client, h, nationality="VN",
+        residence_card_front_doc_id=front, residence_card_back_doc_id=back,
+        visa_expiry_date="2999-12-31",
+    )
+
+    # Admin rejects the submitted documents (user stays pending, ids stay linked).
+    rejected = client.post(
+        f"/api/v1/admin/users/{uid}/reject", json={"reason": "unreadable"}, headers=admin
+    )
+    assert rejected.status_code == 200
+
+    resp = client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "visa_card_required"
+
+
+def test_approve_does_not_blanket_approve_job_photos(
+    client: TestClient, auth_headers: Headers, seed_admin: Headers
+) -> None:
+    """Approval reviews identity/compliance documents only — an unrelated
+    ``job_photo`` upload must stay pending."""
+    admin = seed_admin()
+    h = auth_headers("+819022220013")
+    uid = _signup_worker(client, h)
+    _register_doc(client, h, "photo_id")
+    _register_doc(client, h, "job_photo")
+    _onboard(client, h, nationality="JP")
+
+    resp = client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
+    assert resp.status_code == 200, resp.text
+
+    docs = client.get("/api/v1/documents/me", headers=h).json()
+    by_type = {d["doc_type"]: d["review_status"] for d in docs}
+    assert by_type["photo_id"] == "approved"
+    assert by_type["job_photo"] == "pending"

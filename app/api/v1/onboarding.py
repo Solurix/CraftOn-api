@@ -61,8 +61,12 @@ def update_worker_me(
     payload: WorkerProfileUpdate,
     user: User = Depends(worker_user),
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> WorkerProfileOut:
     profile = onboarding.update_worker(db, user, payload)
+    # A profile fix (e.g. visa data) may make a pending user eligible — retry
+    # auto-approval, same as the POST onboarding path.
+    vetting.maybe_auto_approve(db, user, config=config, today=tokyo_today())
     return worker_out(profile, user)
 
 
@@ -71,8 +75,10 @@ def update_contractor_me(
     payload: ContractorProfileUpdate,
     user: User = Depends(contractor_user),
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> ContractorProfileOut:
     profile = onboarding.update_contractor(db, user, payload)
+    vetting.maybe_auto_approve(db, user, config=config, today=tokyo_today())
     return contractor_out(profile, user)
 
 

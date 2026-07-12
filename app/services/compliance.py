@@ -15,10 +15,14 @@ the failure reaches the client as a localized, actionable message.
 from __future__ import annotations
 
 import datetime
+import uuid
+
+from sqlalchemy.orm import Session
 
 from app.core import errors
 from app.core.config import ConfigService
-from app.models.enums import WorkerClass
+from app.models.document import Document
+from app.models.enums import DocReviewStatus, WorkerClass
 from app.models.worker_profile import WorkerProfile
 
 JAPAN = "JP"
@@ -32,8 +36,15 @@ def _gate_error(code: str, message_key: str) -> errors.AppError:
     )
 
 
+def _card_doc_usable(db: Session, doc_id: uuid.UUID) -> bool:
+    """A residence-card document counts only if it exists and wasn't rejected
+    by an admin — a rejected card is no card (docs/08)."""
+    doc = db.get(Document, doc_id)
+    return doc is not None and doc.review_status is not DocReviewStatus.REJECTED
+
+
 def check_visa_gate(
-    profile: WorkerProfile, *, today: datetime.date, config: ConfigService
+    db: Session, profile: WorkerProfile, *, today: datetime.date, config: ConfigService
 ) -> None:
     """Raise if a non-JP worker lacks card + valid visa (when the gate is on)."""
     if not config.flag("visa_gate_enabled"):
@@ -41,6 +52,11 @@ def check_visa_gate(
     if (profile.nationality or "").upper() == JAPAN:
         return
     if not (profile.residence_card_front_doc_id and profile.residence_card_back_doc_id):
+        raise _gate_error("visa_card_required", "error.visa.card_required")
+    if not (
+        _card_doc_usable(db, profile.residence_card_front_doc_id)
+        and _card_doc_usable(db, profile.residence_card_back_doc_id)
+    ):
         raise _gate_error("visa_card_required", "error.visa.card_required")
     if profile.visa_expiry_date is None:
         raise _gate_error("visa_expiry_required", "error.visa.expiry_required")
@@ -59,8 +75,8 @@ def check_freelance_insurance_gate(
 
 
 def check_confirmable(
-    profile: WorkerProfile, *, today: datetime.date, config: ConfigService
+    db: Session, profile: WorkerProfile, *, today: datetime.date, config: ConfigService
 ) -> None:
     """All gates that must pass before a worker can be confirmed for a job."""
-    check_visa_gate(profile, today=today, config=config)
+    check_visa_gate(db, profile, today=today, config=config)
     check_freelance_insurance_gate(profile, config=config)

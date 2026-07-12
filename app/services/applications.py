@@ -104,7 +104,7 @@ def confirm_application(
         raise errors.bad_request("onboarding_incomplete", "error.onboarding.not_completed")
 
     # Compliance gates: visa (non-JP) + freelance insurance.
-    compliance.check_confirmable(profile, today=today, config=config)
+    compliance.check_confirmable(db, profile, today=today, config=config)
 
     contract_type = terms.contract_type_for(profile.worker_class)
     platform_fee = config.get_int("platform_fee_per_match")

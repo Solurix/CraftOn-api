@@ -171,8 +171,9 @@ def check_in(
     matching_id: uuid.UUID,
     user: User = Depends(approved_worker),
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> MatchingOut:
-    matching = lifecycle.check_in(db, user, matching_id)
+    matching = lifecycle.check_in(db, user, matching_id, config=config)
     return matching_out(db, matching, locale=user.preferred_language)
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.factories import signup_payload
@@ -134,3 +135,86 @@ def test_toggle_on_skips_profileless_pending_user(
 
     _set_auto_approve(client, seed_admin(), True)
     assert _status(client, h) == "pending"
+
+
+def _register_doc(client: TestClient, headers: dict[str, str], doc_type: str) -> str:
+    url = client.post(
+        "/api/v1/documents/upload-url", json={"doc_type": doc_type}, headers=headers
+    ).json()
+    reg = client.post(
+        "/api/v1/documents",
+        json={"doc_type": doc_type, "storage_path": url["storage_path"]},
+        headers=headers,
+    )
+    assert reg.status_code == 201
+    return reg.json()["id"]
+
+
+def test_worker_profile_patch_retries_auto_approval(
+    client: TestClient, auth_headers: Headers, seed_admin: Admin
+) -> None:
+    """A worker who first failed the visa gate is auto-approved once they fix
+    their visa data via PATCH /workers/me (the flag is on)."""
+    _set_auto_approve(client, seed_admin(), True)
+
+    h = auth_headers("+819014440007")
+    _signup(client, h, "worker")
+    resp = client.post(
+        "/api/v1/onboarding/worker",
+        json={"nationality": "VN", "worker_class": "employee", "trades": ["大工"]},
+        headers=h,
+    )
+    assert resp.status_code == 200 and resp.json()["status"] == "pending"
+
+    front = _register_doc(client, h, "residence_card_front")
+    back = _register_doc(client, h, "residence_card_back")
+    patched = client.patch(
+        "/api/v1/workers/me",
+        json={
+            "residence_card_front_doc_id": front,
+            "residence_card_back_doc_id": back,
+            "visa_expiry_date": "2999-12-31",
+        },
+        headers=h,
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["status"] == "approved"
+    assert _status(client, h) == "approved"
+
+
+def test_worker_profile_patch_leaves_ineligible_worker_pending(
+    client: TestClient, auth_headers: Headers, seed_admin: Admin
+) -> None:
+    _set_auto_approve(client, seed_admin(), True)
+
+    h = auth_headers("+819014440008")
+    _signup(client, h, "worker")
+    client.post(
+        "/api/v1/onboarding/worker",
+        json={"nationality": "VN", "worker_class": "employee"},
+        headers=h,
+    )
+    # A profile edit that still fails the gate does not approve.
+    patched = client.patch("/api/v1/workers/me", json={"bio": "hi"}, headers=h)
+    assert patched.status_code == 200
+    assert patched.json()["status"] == "pending"
+
+
+def test_contractor_profile_patch_retries_auto_approval(
+    client: TestClient, auth_headers: Headers, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Flag turned on via the env layer (no admin PATCH → no backlog sweep), so
+    the PATCH /contractors/me path itself performs the approval."""
+    h = auth_headers("+819014440009")
+    _signup(client, h, "contractor")
+    client.post(
+        "/api/v1/onboarding/contractor",
+        json={"company_name": "Late建設", "contact_person": "Mori", "prefecture": "Tokyo"},
+        headers=h,
+    )
+    assert _status(client, h) == "pending"  # flag was off at onboarding time
+
+    monkeypatch.setenv("CRAFTON_CFG__AUTO_APPROVE_USERS", "true")
+    patched = client.patch("/api/v1/contractors/me", json={"bio": "hello"}, headers=h)
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["status"] == "approved"

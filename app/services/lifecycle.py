@@ -7,12 +7,14 @@ snapshotted as *owed* at confirm; completion is when it becomes collectable
 
 from __future__ import annotations
 
+import datetime
 import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core import errors
+from app.core import clock, errors
 from app.core.clock import now_utc
+from app.core.config import ConfigService
 from app.models.enums import MatchingStatus, NotificationType
 from app.models.job import Job
 from app.models.matching import Matching
@@ -45,9 +47,41 @@ def _contractor_id(db: Session, matching: Matching) -> uuid.UUID | None:
     return job.contractor_id if job else None
 
 
-def check_in(db: Session, worker: User, matching_id: uuid.UUID) -> Matching:
+def _check_checkin_window(job: Job, config: ConfigService) -> None:
+    """Reject check-ins outside the shift window (docs/07).
+
+    Check-in opens ``checkin_open_minutes_before_start`` minutes before the
+    job's start (``work_date`` + ``start_time``, Asia/Tokyo) and closes at the
+    shift's end (``end_time``; an end at or before the start means the shift
+    runs overnight into the next day). ``0``/negative disables the whole check
+    — the permissive escape hatch per docs/07.
+    """
+    open_minutes = config.get_int("checkin_open_minutes_before_start")
+    if open_minutes <= 0:
+        return
+    start = clock.combine_tokyo(job.work_date, job.start_time)
+    end = clock.combine_tokyo(job.work_date, job.end_time)
+    if job.end_time <= job.start_time:  # overnight shift ends the next day
+        end += datetime.timedelta(days=1)
+    now = clock.tokyo_now()
+    if now < start - datetime.timedelta(minutes=open_minutes):
+        raise errors.conflict(
+            "checkin_too_early", "error.matching.checkin_too_early", minutes=open_minutes
+        )
+    if now > end:
+        raise errors.conflict(
+            "checkin_window_closed", "error.matching.checkin_window_closed"
+        )
+
+
+def check_in(
+    db: Session, worker: User, matching_id: uuid.UUID, *, config: ConfigService
+) -> Matching:
     matching = _matching_for_worker(db, worker, matching_id)
     assert_transition(matching.status, MatchingStatus.CHECKED_IN)
+    job = db.get(Job, matching.job_id)
+    if job is not None:
+        _check_checkin_window(job, config)
     matching.status = MatchingStatus.CHECKED_IN
     matching.checked_in_at = now_utc()
     contractor_id = _contractor_id(db, matching)

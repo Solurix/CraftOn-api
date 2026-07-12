@@ -166,9 +166,12 @@ def suspend_user(
     user_id: uuid.UUID,
     payload: SuspendIn,
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> UserOut:
     target = _get_target(db, user_id)
-    updated = vetting.set_suspended(db, target, suspend=payload.suspend)
+    updated = vetting.set_suspended(
+        db, target, suspend=payload.suspend, config=config, today=tokyo_today()
+    )
     return UserOut.model_validate(updated)
 
 

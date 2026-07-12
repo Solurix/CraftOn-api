@@ -15,7 +15,7 @@ Per-module index of `crafton-api`. Product/architecture docs live in the
 | `app/core/identifiers.py` | Username/email/phone normalization for login identifiers |
 | `app/core/i18n.py` | ja/en catalog + `translate()` + `resolve_locale()`; `python -m app.core.i18n --check` = parity check |
 | `app/core/errors.py` | `AppError` + factories; exception handlers render `{error:{code,message}}` localized via `request.state.locale` |
-| `app/core/clock.py` | UTC storage / Asia/Tokyo business time (`tokyo_today`), monkeypatchable |
+| `app/core/clock.py` | UTC storage / Asia/Tokyo business time (`tokyo_today`, `combine_tokyo`), monkeypatchable |
 | `app/core/logging.py` | Structured JSON logging for Cloud Logging |
 | `app/core/storage.py` | `StorageService` signed upload/read URLs: `GcsStorage` / `FakeStorage` (`CRAFTON_STORAGE_MODE`) |
 | `app/db/base.py` | Declarative `Base`, naming convention, UUID/timestamp mixins |
@@ -27,20 +27,20 @@ Per-module index of `crafton-api`. Product/architecture docs live in the
 | `app/api/v1/router.py` | Aggregates all v1 feature routers |
 | `app/services/onboarding.py` | Profile create/update services + `worker_out`/`contractor_out` DTO builders |
 | `app/services/documents.py` | Signed upload URLs, register, list, view documents |
-| `app/services/jobs.py` | Job post/search/lifecycle; config-driven area/trade checks |
+| `app/services/jobs.py` | Job post/search/lifecycle; config-driven area/trade checks; edit rules (cutoff window, terms lock, headcount floor, pending-applicant notify) — `tests/test_job_edit_rules.py` |
 | `app/services/saved_jobs.py` | Worker job bookmarks (idempotent save/unsave) |
 | `app/services/applications.py` | Apply + **confirm**: compliance gates, contract-type routing, wage snapshot, fee recording |
 | `app/services/matchings.py` | Matching reads, participant authZ, `enrich_matching` DTO enrichment |
-| `app/services/lifecycle.py` | Day-of transitions: check-in → complete-request → approve-completion, cancel |
+| `app/services/lifecycle.py` | Day-of transitions: check-in (time-gated by `checkin_open_minutes_before_start`, Asia/Tokyo — `tests/test_checkin_window.py`) → complete-request → approve-completion, cancel |
 | `app/services/state_machine.py` | Legal matching-status transitions (single authority) |
-| `app/services/compliance.py` | Visa gate + freelance-insurance gate (config-toggleable, ON by default) |
+| `app/services/compliance.py` | Visa gate (card docs must exist and not be rejected) + freelance-insurance gate (config-toggleable, ON by default) |
 | `app/services/masking.py` | Authoritative contact masking for chat (anti-中抜き) |
 | `app/services/chat.py` | Message list/send (send applies masking) |
 | `app/services/reviews.py` | Two-way post-completion reviews; recompute trust_score/rating |
 | `app/services/notifications.py` | Create-on-event (commit with caller), list, mark read |
 | `app/services/devices.py` | Device touch/list/revoke (via `X-Device-Id` header) |
 | `app/services/trades.py` | Trade catalog CRUD + free-text merge |
-| `app/services/vetting.py` | Admin approve/reject/suspend (+ auto-approve), enforces visa gate |
+| `app/services/vetting.py` | Admin approve/reject/suspend (+ auto-approve), enforces visa gate; unsuspend re-checks eligibility (approved or back to pending); blanket doc review skips `job_photo` |
 | `app/services/admin_ops.py` | Admin matchings overview, fee reconciliation, config overrides, create admin |
 | `app/services/terms.py` | Localized human-readable contract terms (placeholder wording) |
 | `app/services/debug_seed.py` | Random dev/CI seed data (fake-auth only) |

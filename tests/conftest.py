@@ -20,6 +20,11 @@ os.environ.setdefault(
 )
 if "CRAFTON_TEST_DATABASE_URL" in os.environ:
     os.environ["CRAFTON_DATABASE_URL"] = os.environ["CRAFTON_TEST_DATABASE_URL"]
+# Disable the check-in time window for the shared fixtures (factories post jobs
+# on fixed dates, so real "now" is outside the shift). The window itself is
+# exercised in tests/test_checkin_window.py, which re-enables it and freezes
+# the clock — same pattern as approved_member bypassing vetting.
+os.environ.setdefault("CRAFTON_CFG__CHECKIN_OPEN_MINUTES_BEFORE_START", "0")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
