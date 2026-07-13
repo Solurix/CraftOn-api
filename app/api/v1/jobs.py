@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -21,16 +21,11 @@ from app.core.storage import StorageService
 from app.db.session import get_db
 from app.models.job import Job
 from app.models.user import User
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_403_404
 from app.schemas.job import JobCreate, JobOut, JobPhotoOut, JobUpdate
 from app.services import documents, jobs, saved_jobs
 
 router = APIRouter(tags=["jobs"])
-
-_ERRORS: dict[int | str, dict[str, Any]] = {
-    403: {"model": ErrorResponse},
-    404: {"model": ErrorResponse},
-}
 
 
 def job_out(db: Session, job: Job) -> JobOut:
@@ -39,7 +34,7 @@ def job_out(db: Session, job: Job) -> JobOut:
     return out
 
 
-@router.post("/jobs", response_model=JobOut, status_code=201, responses=_ERRORS)
+@router.post("/jobs", response_model=JobOut, status_code=201, responses=RESP_403_404)
 def create_job(
     payload: JobCreate,
     user: User = Depends(approved_contractor),
@@ -107,7 +102,7 @@ def list_saved_job_ids(
     return saved_jobs.saved_job_ids(db, user)
 
 
-@router.put("/jobs/{job_id}/save", status_code=204, responses=_ERRORS)
+@router.put("/jobs/{job_id}/save", status_code=204, responses=RESP_403_404)
 def save_job(
     job_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -116,7 +111,7 @@ def save_job(
     saved_jobs.save_job(db, user, job_id)
 
 
-@router.delete("/jobs/{job_id}/save", status_code=204, responses=_ERRORS)
+@router.delete("/jobs/{job_id}/save", status_code=204, responses=RESP_403_404)
 def unsave_job(
     job_id: uuid.UUID,
     user: User = Depends(approved_worker),
@@ -125,7 +120,7 @@ def unsave_job(
     saved_jobs.unsave_job(db, user, job_id)
 
 
-@router.get("/jobs/{job_id}", response_model=JobOut, responses=_ERRORS)
+@router.get("/jobs/{job_id}", response_model=JobOut, responses=RESP_403_404)
 def get_job(
     job_id: uuid.UUID,
     user: User = Depends(require_approved),
@@ -134,7 +129,7 @@ def get_job(
     return job_out(db, jobs.get_job(db, job_id))
 
 
-@router.patch("/jobs/{job_id}", response_model=JobOut, responses=_ERRORS)
+@router.patch("/jobs/{job_id}", response_model=JobOut, responses=RESP_403_404)
 def update_job(
     job_id: uuid.UUID,
     payload: JobUpdate,
@@ -145,7 +140,7 @@ def update_job(
     return job_out(db, jobs.update_job(db, user, job_id, payload, config))
 
 
-@router.post("/jobs/{job_id}/cancel", response_model=JobOut, responses=_ERRORS)
+@router.post("/jobs/{job_id}/cancel", response_model=JobOut, responses=RESP_403_404)
 def cancel_job(
     job_id: uuid.UUID,
     user: User = Depends(approved_contractor),
@@ -154,7 +149,7 @@ def cancel_job(
     return job_out(db, jobs.cancel_job(db, user, job_id))
 
 
-@router.get("/jobs/{job_id}/photos", response_model=list[JobPhotoOut], responses=_ERRORS)
+@router.get("/jobs/{job_id}/photos", response_model=list[JobPhotoOut], responses=RESP_403_404)
 def job_photos(
     job_id: uuid.UUID,
     _viewer: User = Depends(require_approved),

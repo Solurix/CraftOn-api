@@ -6,20 +6,17 @@ from collections.abc import Callable
 
 from fastapi.testclient import TestClient
 
-from tests.factories import signup_payload
+from tests.factories import (
+    CONTRACTOR,
+    WORKER,
+    Member,
+    apply_to_job,
+    post_job,
+    signup_payload,
+    unique_phone,
+)
 
-Member = Callable[..., tuple[dict[str, str], str]]
 Admin = Callable[..., dict[str, str]]
-
-_CONTRACTOR = {"company_name": "ABC", "contact_person": "S", "prefecture": "Tokyo"}
-_WORKER = {"nationality": "JP", "worker_class": "employee", "trades": ["大工"]}
-_JOB = {
-    "trades": ["大工"], "work_date": "2026-07-01",
-    "start_time": "08:00:00", "end_time": "17:00:00",
-    "prefecture": "Tokyo", "daily_wage": 18000, "headcount": 1,
-}
-
-_phone = iter(f"+8190600{i:05d}" for i in range(1, 99999))
 
 
 def _types(client: TestClient, headers: dict[str, str]) -> list[str]:
@@ -31,9 +28,9 @@ def _unread(client: TestClient, headers: dict[str, str]) -> int:
 
 
 def test_apply_notifies_contractor(client: TestClient, approved_member: Member) -> None:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
+    ch, _ = approved_member("contractor", unique_phone(), onboard=CONTRACTOR)
+    wh, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    job_id = post_job(client, ch)
     client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh)
 
     notes = client.get("/api/v1/notifications", headers=ch).json()
@@ -46,10 +43,10 @@ def test_apply_notifies_contractor(client: TestClient, approved_member: Member) 
 
 
 def test_confirm_notifies_worker(client: TestClient, approved_member: Member) -> None:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
-    app_id = client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh).json()["id"]
+    ch, _ = approved_member("contractor", unique_phone(), onboard=CONTRACTOR)
+    wh, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    job_id = post_job(client, ch)
+    app_id = apply_to_job(client, wh, job_id)
     mid = client.post(f"/api/v1/applications/{app_id}/confirm", headers=ch).json()["id"]
 
     notes = client.get("/api/v1/notifications", headers=wh).json()
@@ -58,10 +55,10 @@ def test_confirm_notifies_worker(client: TestClient, approved_member: Member) ->
 
 
 def test_full_cycle_notifications(client: TestClient, approved_member: Member) -> None:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
-    app_id = client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh).json()["id"]
+    ch, _ = approved_member("contractor", unique_phone(), onboard=CONTRACTOR)
+    wh, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    job_id = post_job(client, ch)
+    app_id = apply_to_job(client, wh, job_id)
     mid = client.post(f"/api/v1/applications/{app_id}/confirm", headers=ch).json()["id"]
     client.post(f"/api/v1/matchings/{mid}/check-in", headers=wh)
     client.post(f"/api/v1/matchings/{mid}/complete-request", headers=wh)
@@ -79,10 +76,10 @@ def test_full_cycle_notifications(client: TestClient, approved_member: Member) -
 
 
 def test_mark_read_and_read_all(client: TestClient, approved_member: Member) -> None:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
-    app_id = client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh).json()["id"]
+    ch, _ = approved_member("contractor", unique_phone(), onboard=CONTRACTOR)
+    wh, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    job_id = post_job(client, ch)
+    app_id = apply_to_job(client, wh, job_id)
     client.post(f"/api/v1/applications/{app_id}/confirm", headers=ch)  # worker: 1
     client.post(f"/api/v1/applications/{app_id}/confirm", headers=ch)  # 409, no extra note
 
@@ -97,10 +94,10 @@ def test_mark_read_and_read_all(client: TestClient, approved_member: Member) -> 
 
 
 def test_notifications_are_per_user(client: TestClient, approved_member: Member) -> None:
-    ch, _ = approved_member("contractor", next(_phone), onboard=_CONTRACTOR)
-    wh, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    outsider, _ = approved_member("worker", next(_phone), onboard=_WORKER)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=ch).json()["id"]
+    ch, _ = approved_member("contractor", unique_phone(), onboard=CONTRACTOR)
+    wh, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    outsider, _ = approved_member("worker", unique_phone(), onboard=WORKER)
+    job_id = post_job(client, ch)
     client.post(f"/api/v1/jobs/{job_id}/apply", headers=wh)
     assert _unread(client, outsider) == 0
 
@@ -113,13 +110,13 @@ def test_account_approved_notification(
     client: TestClient, auth_headers: Callable[..., dict[str, str]], seed_admin: Admin
 ) -> None:
     admin = seed_admin()
-    wh = auth_headers(next(_phone))
+    wh = auth_headers(unique_phone())
     uid = client.post(
         "/api/v1/auth/session",
         json=signup_payload(user_type="worker", display_name="Taro"),
         headers=wh,
     ).json()["user"]["id"]
-    client.post("/api/v1/onboarding/worker", json=_WORKER, headers=wh)
+    client.post("/api/v1/onboarding/worker", json=WORKER, headers=wh)
     client.post(f"/api/v1/admin/users/{uid}/approve", headers=admin)
 
     notes = client.get("/api/v1/notifications", headers=wh).json()

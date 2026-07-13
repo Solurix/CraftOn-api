@@ -86,6 +86,7 @@ class NotificationType(StrEnum):
     types don't need a migration; this enum is the known, rendered set."""
 
     APPLICATION_RECEIVED = "application_received"
+    JOB_UPDATED = "job_updated"
     APPLICATION_CONFIRMED = "application_confirmed"
     APPLICATION_REJECTED = "application_rejected"
     WORKER_CHECKED_IN = "worker_checked_in"

@@ -8,10 +8,26 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import errors
+from app.models.contractor_profile import ContractorProfile
 from app.models.enums import MatchingStatus, UserType
 from app.models.job import Job
 from app.models.matching import Matching
 from app.models.user import User
+from app.schemas.matching import MatchingOut
+
+
+def enrich_matching(db: Session, matching: Matching) -> MatchingOut:
+    """``MatchingOut`` enriched with job/worker/company display fields (no terms)."""
+    out = MatchingOut.model_validate(matching)
+    job = db.get(Job, matching.job_id)
+    worker = db.get(User, matching.worker_id)
+    company = db.get(ContractorProfile, job.contractor_id) if job else None
+    out.contractor_id = job.contractor_id if job else None
+    out.worker_display_name = worker.display_name if worker else None
+    out.contractor_company_name = company.company_name if company else None
+    out.work_date = job.work_date if job else None
+    out.prefecture = job.prefecture if job else None
+    return out
 
 
 def is_participant(db: Session, user: User, matching: Matching) -> bool:

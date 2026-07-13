@@ -201,6 +201,69 @@ def test_work_history_description_roundtrip(
     assert resp.json()["work_history"] == [entry]
 
 
+def test_repeat_onboarding_keeps_residence_docs_when_omitted(
+    client: TestClient, auth_headers: Headers
+) -> None:
+    """A repeat POST /onboarding/worker without the doc-id fields must not
+    unlink the residence-card documents (they'd silently bypass re-vetting)."""
+    h = auth_headers("+819011110024")
+    _signup(client, h, "worker", "Binh")
+
+    def _register(doc_type: str) -> str:
+        ticket = client.post(
+            "/api/v1/documents/upload-url", json={"doc_type": doc_type}, headers=h
+        ).json()
+        return client.post(
+            "/api/v1/documents",
+            json={"doc_type": doc_type, "storage_path": ticket["storage_path"]},
+            headers=h,
+        ).json()["id"]
+
+    front, back = _register("residence_card_front"), _register("residence_card_back")
+    first = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "VN",
+            "worker_class": "employee",
+            "residence_card_front_doc_id": front,
+            "residence_card_back_doc_id": back,
+            "visa_expiry_date": "2030-01-01",
+        },
+        headers=h,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["residence_card_front_doc_id"] == front
+
+    # Re-POST without the doc ids (e.g. editing trades) → links are preserved.
+    again = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "VN",
+            "worker_class": "employee",
+            "trades": ["鳶"],
+            "visa_expiry_date": "2030-01-01",
+        },
+        headers=h,
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["residence_card_front_doc_id"] == front
+    assert again.json()["residence_card_back_doc_id"] == back
+
+    # An explicit null still clears them (exclude_unset, not not-None, semantics).
+    cleared = client.post(
+        "/api/v1/onboarding/worker",
+        json={
+            "nationality": "VN",
+            "worker_class": "employee",
+            "residence_card_front_doc_id": None,
+            "residence_card_back_doc_id": None,
+        },
+        headers=h,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["residence_card_front_doc_id"] is None
+
+
 def test_worker_structured_name_composes_full_name(
     client: TestClient, auth_headers: Headers
 ) -> None:

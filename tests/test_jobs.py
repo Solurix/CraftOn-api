@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Callable
 
 import pytest
 from fastapi.testclient import TestClient
+
+from app.core import clock
 
 Member = Callable[..., tuple[dict[str, str], str]]
 
@@ -158,7 +161,12 @@ def test_only_owner_can_edit_and_cancel(
 ) -> None:
     owner, _ = approved_member("contractor", "+819033330008", onboard=_CONTRACTOR_ONBOARD)
     other, _ = approved_member("contractor", "+819033330009", onboard=_CONTRACTOR_ONBOARD)
-    job_id = client.post("/api/v1/jobs", json=_JOB, headers=owner).json()["id"]
+    # Far-future work date so the edit-cutoff window (tests/test_job_edit_rules.py)
+    # never interferes with the ownership checks under test here.
+    future = (clock.tokyo_today() + datetime.timedelta(days=30)).isoformat()
+    job_id = client.post(
+        "/api/v1/jobs", json={**_JOB, "work_date": future}, headers=owner
+    ).json()["id"]
 
     forbidden = client.patch(
         f"/api/v1/jobs/{job_id}", json={"daily_wage": 20000}, headers=other
@@ -270,3 +278,39 @@ def test_job_photos_must_be_own_job_photo_docs(
     )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "invalid_photo"
+
+
+def test_job_photo_registers_approved_but_vetting_docs_stay_pending(
+    client: TestClient, approved_member: Member
+) -> None:
+    """Work photos are post-moderated — the only approval is per-account
+    (vetting), so they're born `approved`. Identity docs still start pending."""
+    ch, _ = approved_member(
+        "contractor", "+819055500099", onboard=_CONTRACTOR_ONBOARD
+    )
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "job_photo", "content_type": "image/jpeg"},
+        headers=ch,
+    ).json()
+    photo = client.post(
+        "/api/v1/documents",
+        json={"doc_type": "job_photo", "storage_path": ticket["storage_path"]},
+        headers=ch,
+    ).json()
+    assert photo["review_status"] == "approved"
+
+    ticket = client.post(
+        "/api/v1/documents/upload-url",
+        json={"doc_type": "residence_card_front", "content_type": "image/jpeg"},
+        headers=ch,
+    ).json()
+    card = client.post(
+        "/api/v1/documents",
+        json={
+            "doc_type": "residence_card_front",
+            "storage_path": ticket["storage_path"],
+        },
+        headers=ch,
+    ).json()
+    assert card["review_status"] == "pending"

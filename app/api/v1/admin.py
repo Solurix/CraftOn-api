@@ -7,13 +7,11 @@ Config and matchings admin endpoints are added in later build-order steps.
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import admin_user, get_config, get_storage_service
-from app.api.v1.onboarding import contractor_out, worker_out
 from app.core import errors
 from app.core.clock import tokyo_today
 from app.core.config import AuthMode, ConfigService, get_settings
@@ -22,8 +20,6 @@ from app.db.session import get_db
 from app.models.contractor_profile import ContractorProfile
 from app.models.document import Document
 from app.models.enums import FeeStatus, JobStatus, MatchingStatus, UserStatus, UserType
-from app.models.job import Job
-from app.models.matching import Matching
 from app.models.user import User
 from app.models.worker_profile import WorkerProfile
 from app.schemas.admin import (
@@ -37,16 +33,15 @@ from app.schemas.admin import (
     VettingItem,
     VettingQueueOut,
 )
-from app.schemas.common import ErrorResponse
+from app.schemas.common import RESP_404, ErrorResponse
 from app.schemas.document import DocumentWithUrlOut
 from app.schemas.job import JobOut
 from app.schemas.matching import MatchingOut
 from app.schemas.user import UserOut
-from app.services import admin_ops, debug_seed, jobs, vetting
+from app.services import admin_ops, debug_seed, jobs, matchings, vetting
+from app.services.onboarding import contractor_out, worker_out
 
 router = APIRouter(tags=["admin"], dependencies=[Depends(admin_user)])
-
-_NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": ErrorResponse}}
 
 
 def _doc_out(doc: Document, storage: StorageService) -> DocumentWithUrlOut:
@@ -85,20 +80,6 @@ def _build_user_item(db: Session, user: User, storage: StorageService) -> Vettin
 def _admin_job_out(db: Session, job: object) -> JobOut:
     out = JobOut.model_validate(job)
     out.contractor_company_name = jobs.company_name_for(db, out.contractor_id)
-    return out
-
-
-def _admin_matching_out(db: Session, matching: Matching) -> MatchingOut:
-    """Matching enriched with display names for the admin overview (no terms)."""
-    out = MatchingOut.model_validate(matching)
-    job = db.get(Job, matching.job_id)
-    worker = db.get(User, matching.worker_id)
-    company = db.get(ContractorProfile, job.contractor_id) if job else None
-    out.contractor_id = job.contractor_id if job else None
-    out.worker_display_name = worker.display_name if worker else None
-    out.contractor_company_name = company.company_name if company else None
-    out.work_date = job.work_date if job else None
-    out.prefecture = job.prefecture if job else None
     return out
 
 
@@ -158,7 +139,7 @@ def create_admin(
     return UserOut.model_validate(admin)
 
 
-@router.post("/admin/users/{user_id}/approve", response_model=UserOut, responses=_NOT_FOUND)
+@router.post("/admin/users/{user_id}/approve", response_model=UserOut, responses=RESP_404)
 def approve_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -169,7 +150,7 @@ def approve_user(
     return UserOut.model_validate(updated)
 
 
-@router.post("/admin/users/{user_id}/reject", response_model=UserOut, responses=_NOT_FOUND)
+@router.post("/admin/users/{user_id}/reject", response_model=UserOut, responses=RESP_404)
 def reject_user(
     user_id: uuid.UUID,
     payload: RejectIn,
@@ -180,14 +161,17 @@ def reject_user(
     return UserOut.model_validate(updated)
 
 
-@router.post("/admin/users/{user_id}/suspend", response_model=UserOut, responses=_NOT_FOUND)
+@router.post("/admin/users/{user_id}/suspend", response_model=UserOut, responses=RESP_404)
 def suspend_user(
     user_id: uuid.UUID,
     payload: SuspendIn,
     db: Session = Depends(get_db),
+    config: ConfigService = Depends(get_config),
 ) -> UserOut:
     target = _get_target(db, user_id)
-    updated = vetting.set_suspended(db, target, suspend=payload.suspend)
+    updated = vetting.set_suspended(
+        db, target, suspend=payload.suspend, config=config, today=tokyo_today()
+    )
     return UserOut.model_validate(updated)
 
 
@@ -200,11 +184,12 @@ def list_matchings(
     fee_status: FeeStatus | None = None,
 ) -> list[MatchingOut]:
     rows = admin_ops.list_matchings(db, status=status, fee_status=fee_status)
-    return [_admin_matching_out(db, m) for m in rows]
+    # Enriched with display names for the admin overview (no terms).
+    return [matchings.enrich_matching(db, m) for m in rows]
 
 
 @router.post("/admin/matchings/{matching_id}/mark-fee-paid", response_model=MatchingOut,
-             responses=_NOT_FOUND)
+             responses=RESP_404)
 def mark_fee_paid(
     matching_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -238,7 +223,7 @@ def read_config(config: ConfigService = Depends(get_config)) -> ConfigOut:
     return ConfigOut(config=config.all_config())
 
 
-@router.patch("/admin/config", response_model=ConfigOut, responses=_NOT_FOUND)
+@router.patch("/admin/config", response_model=ConfigOut, responses=RESP_404)
 def update_config(
     payload: ConfigUpdateIn,
     admin: User = Depends(admin_user),

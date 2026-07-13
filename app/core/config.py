@@ -161,6 +161,8 @@ BUSINESS_CONFIG_DEFAULTS: dict[str, Any] = {
     "withholding_threshold_jpy": 9300,  # (P2)
     "noshow_confirm_hour_local": 20,  # Asia/Tokyo
     "noshow_morning_lead_minutes": 120,  # (P2)
+    "job_edit_cutoff_hours": 12,  # edits blocked within N h of start (Asia/Tokyo); 0 = off
+    "checkin_open_minutes_before_start": 120,  # check-in opens N min before start; <=0 = off
     "checkin_radius_meters": 500,  # (GPS verify P2)
     "weekly_work_hours_cap": None,  # null = no cap (permissive)
     "student_visa_weekly_hours": 28,  # (P2)
@@ -267,7 +269,24 @@ class ConfigService:
         return int(self.get(key))
 
     def get_bool(self, key: str) -> bool:
-        return bool(self.get(key))
+        """Read a boolean, parsing common string/number spellings.
+
+        Admin overrides and env vars can deliver ``"false"``/``"0"``/… as
+        strings; plain ``bool()`` would treat any non-empty string as True.
+        """
+        value = self.get(key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("false", "0", "no", "off"):
+                return False
+            if lowered in ("true", "1", "yes", "on"):
+                return True
+            return bool(value)  # unknown spelling — fall back to truthiness
+        if isinstance(value, (int, float)):
+            return value != 0
+        return bool(value)
 
     def get_str(self, key: str) -> str:
         return str(self.get(key))

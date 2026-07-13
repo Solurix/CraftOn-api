@@ -109,6 +109,31 @@ def test_duplicate_username_and_email_conflict(
     assert r2.status_code == 409 and r2.json()["error"]["code"] == "email_taken"
 
 
+def test_session_language_switch(client: TestClient, auth_headers: Headers) -> None:
+    headers = auth_headers("+819011113333")
+    reg = signup_payload(user_type="worker", preferred_language="ja")
+    assert client.post("/api/v1/auth/session", json=reg, headers=headers).status_code == 201
+
+    # A returning call may switch the stored language; the response reflects it.
+    switched = client.post(
+        "/api/v1/auth/session", json={"preferred_language": "en"}, headers=headers
+    )
+    assert switched.status_code == 200
+    assert switched.json()["user"]["preferred_language"] == "en"
+
+    # Subsequent errors render in the newly chosen locale (pending worker → 403).
+    err = client.get("/api/v1/matchings/history", headers=headers)
+    assert err.status_code == 403
+    assert err.json()["error"]["message"] == "Your account must be approved before doing this."
+
+    # An unsupported locale is ignored, not stored.
+    ignored = client.post(
+        "/api/v1/auth/session", json={"preferred_language": "fr"}, headers=headers
+    )
+    assert ignored.status_code == 200
+    assert ignored.json()["user"]["preferred_language"] == "en"
+
+
 def test_invalid_token_is_unauthorized(client: TestClient) -> None:
     resp = client.get("/api/v1/me", headers={"Authorization": "Bearer not-a-valid-token"})
     assert resp.status_code == 401

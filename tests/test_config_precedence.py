@@ -63,3 +63,34 @@ def test_list_and_typed_accessors(db: Session, monkeypatch: pytest.MonkeyPatch) 
 def test_all_config_snapshot_includes_every_key(db: Session) -> None:
     snapshot = ConfigService(db).all_config()
     assert set(snapshot) == set(CONFIG_DEFAULTS)
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (True, True),
+        (False, False),
+        ("false", False),  # the footgun: bool("false") is True
+        ("FALSE", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
+        ("true", True),
+        ("1", True),
+        ("yes", True),
+        ("ON", True),
+        (0, False),
+        (1, True),
+        (2, True),
+        ("", False),  # unknown strings fall back to truthiness
+        ("maybe", True),
+        (None, False),
+    ],
+)
+def test_get_bool_parses_common_spellings(
+    db: Session, stored: object, expected: bool
+) -> None:
+    """Admin config JSON can store booleans as strings — parse, don't truthify."""
+    db.add(AppConfig(key="visa_gate_enabled", value=stored))
+    db.commit()
+    assert ConfigService(db).get_bool("visa_gate_enabled") is expected
